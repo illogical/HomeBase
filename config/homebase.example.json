@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "server": {
+    "port": 17106
+  },
+  "applications": [
+    {
+      "id": "example-app",
+      "displayName": "Example App",
+      "description": "Replace this entry with an application in your workspace.",
+      "slug": "example-app",
+      "enabled": false,
+      "repoPath": "ExampleApp",
+      "adapterPath": "dist/host/index.js",
+      "contractVersion": 1,
+      "defaultBranch": "main",
+      "packageManager": "npm",
+      "devCommands": [
+        "npm run dev"
+      ],
+      "tags": [
+        "example"
+      ],
+      "category": "Examples",
+      "sortOrder": 10
+    }
+  ]
+}

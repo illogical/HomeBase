@@ -39,13 +39,14 @@ behavior has its own approved plan.
 
 ## Phase 1: Configuration foundation
 
-**Status:** Not started  
-**Plan:** pending
+**Status:** In progress
+
+**Plan:** [Compact configuration schema and samples](plans/2026-08-15-configuration-schema-and-samples.md)
 
 - [ ] Scaffold the Node 24, TypeScript, Express 5 server and its test harness.
 - [ ] Implement the in-process JSON configuration service.
-- [ ] Add the Draft 2020-12 registry schema and a sample registry containing
-  DevPlanner, LMApi, MemoryApi, and LMEval.
+- [x] Add the Draft 2020-12 registry schema, a tracked generic example, and an
+  ignored local registry containing DevPlanner, LMApi, MemoryApi, and LMEval.
 - [ ] Validate schema and contract versions, unique IDs/slugs, reserved routes, and
   traversal-safe workspace-relative repository and adapter paths.
 - [ ] Normalize valid records into an immutable internal representation without

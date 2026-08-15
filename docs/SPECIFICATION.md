@@ -43,10 +43,12 @@ automation, or a general administration console.
 
 ### 2.2 Local and Tailnet access
 
-HomeBase listens on a port supplied through `HOMEBASE_PORT`. The first
-implementation plan will select the sample default and final container port
-mapping. Docker must publish the port on host loopback so the local endpoint is
-available at `http://localhost:<port>` without exposing it directly on the LAN.
+HomeBase uses `server.port` from the selected JSON registry as its listener port;
+the default local registry value is `17106`. When `HOMEBASE_PORT` is set, its
+validated integer value takes precedence. An invalid override is a startup error
+and must not silently fall back to the registry value. Docker must publish the
+effective port on host loopback so the local endpoint is available at
+`http://localhost:<port>` without exposing it directly on the LAN.
 
 Tailscale runs on the host, not in the HomeBase container or a sidecar. A
 host-managed Tailscale Serve configuration proxies
@@ -76,7 +78,8 @@ contract defined here.
 
 The configuration service is an in-process HomeBase server module. It:
 
-- reads an explicitly selected JSON registry file;
+- reads `config/homebase.json` by default or the file explicitly selected by
+  `HOMEBASE_CONFIG_PATH`;
 - validates the complete document before the HTTP listener starts;
 - resolves repository and adapter paths beneath `HOMEBASE_WORKSPACE_PATH`;
 - provides immutable normalized application records to the host and status API;
@@ -85,9 +88,11 @@ The configuration service is an in-process HomeBase server module. It:
 - never discovers or executes code merely because a folder or `package.json`
   exists.
 
-The first implementation plan will select the final registry and schema file
-locations and any environment variable used to select a registry. V1 has no
-browser or HTTP configuration-write API.
+The tracked schema is [homebase.schema.json](../config/homebase.schema.json), and
+the safe public template is
+[homebase.example.json](../config/homebase.example.json). The operational
+`config/homebase.json` file is local and ignored by Git. V1 has no browser or
+HTTP configuration-write API.
 
 ### 3.2 Registry shape
 
@@ -97,6 +102,8 @@ top-level shape:
 | Field | Type | Rules |
 | --- | --- | --- |
 | `schemaVersion` | integer | Required and exactly `1` for v1. |
+| `server` | object | Required; contains the HomeBase listener configuration. |
+| `server.port` | integer | Required; `1` through `65535`; overridden by a valid `HOMEBASE_PORT`. |
 | `applications` | array | Required; application IDs and slugs must be unique. |
 
 Each application object has these fields:
@@ -111,6 +118,10 @@ Each application object has these fields:
 | `repoPath` | Yes | Relative path from the workspace root to the repository. |
 | `adapterPath` | Yes | Relative path from the repository root to compiled JavaScript. |
 | `contractVersion` | Yes | Integer; exactly `1` for the v1 hosted contract. |
+| `defaultBranch` | No | Informational non-empty default branch name. |
+| `packageManager` | No | Informational non-empty package-manager name. |
+| `devCommands` | No | Unique, non-empty standalone command strings; never executed by HomeBase configuration loading. |
+| `tags` | No | Unique, non-empty presentation or capability labels. |
 | `icon` | No | Non-empty icon identifier or application-relative asset reference. |
 | `category` | No | Non-empty presentation label. |
 | `sortOrder` | No | Integer used before display-name ordering. |
@@ -141,65 +152,46 @@ prevent degraded startup.
 
 ### 3.4 Illustrative registry
 
-This example describes the intended model. It is not the checked-in schema or
-runtime configuration; Phase 1 in [TASKS.md](TASKS.md) will create and test those
-artifacts.
+This compact example matches the tracked
+[homebase.example.json](../config/homebase.example.json). It is a safe template,
+not an operational registry. Copy it to the ignored `config/homebase.json` and
+replace its values for a real workspace before enabling an application.
 
 ```json
 {
   "schemaVersion": 1,
+  "server": {
+    "port": 17106
+  },
   "applications": [
     {
-      "id": "devplanner",
-      "displayName": "DevPlanner",
-      "description": "Plan and coordinate development work.",
-      "slug": "devplanner",
-      "enabled": true,
-      "repoPath": "DevPlanner",
-      "adapterPath": "dist/host/index.js",
-      "contractVersion": 1,
-      "category": "Development",
-      "sortOrder": 10
-    },
-    {
-      "id": "lmapi",
-      "displayName": "LMApi",
-      "description": "Use local language-model APIs and tools.",
-      "slug": "lmapi",
-      "enabled": true,
-      "repoPath": "LMApi",
-      "adapterPath": "dist/host/index.js",
-      "contractVersion": 1,
-      "category": "AI",
-      "sortOrder": 20
-    },
-    {
-      "id": "memoryapi",
-      "displayName": "MemoryApi",
-      "description": "Explore and manage memory services.",
-      "slug": "memoryapi",
-      "enabled": true,
-      "repoPath": "MemoryApi",
-      "adapterPath": "dist/host/index.js",
-      "contractVersion": 1,
-      "category": "AI",
-      "sortOrder": 30
-    },
-    {
-      "id": "lmeval",
-      "displayName": "LMEval",
-      "description": "Run and review language-model evaluations.",
-      "slug": "lmeval",
+      "id": "example-app",
+      "displayName": "Example App",
+      "description": "Replace this entry with an application in your workspace.",
+      "slug": "example-app",
       "enabled": false,
-      "repoPath": "LMEval",
+      "repoPath": "ExampleApp",
       "adapterPath": "dist/host/index.js",
       "contractVersion": 1,
-      "category": "AI",
-      "sortOrder": 40
+      "defaultBranch": "main",
+      "packageManager": "npm",
+      "devCommands": [
+        "npm run dev"
+      ],
+      "tags": [
+        "example"
+      ],
+      "category": "Examples",
+      "sortOrder": 10
     }
   ]
 }
 ```
+
+Standalone application ports, health paths, IP allowlists, Tailnet exposure, and
+process-management settings remain owned by each sibling repository. They are
+not HomeBase registry fields because hosted applications share HomeBase's one
+listener and lifecycle.
 
 ## 4. HTTP and browser contracts
 
@@ -364,4 +356,3 @@ Plans may refine undecided implementation details identified in this document.
 They may not silently contradict an established v1 contract. A change to this
 specification must be part of the aligned planning work and be reflected in the
 task index.
-
