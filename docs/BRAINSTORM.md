@@ -2,8 +2,10 @@
 
 > [!NOTE]
 > This document collects possibilities and design concerns. It is not an
-> implementation commitment. Decisions will move into `SPECIFICATION.md` after
-> review and then into a prioritized `TASKS.md`.
+> implementation commitment. Approved v1 decisions are recorded in
+> [SPECIFICATION.md](SPECIFICATION.md), and current priorities and progress are
+> recorded in [TASKS.md](TASKS.md). Where this brainstorm asks an open question
+> that those documents answer, the approved document takes precedence.
 
 ## Product vision
 
@@ -392,9 +394,10 @@ complexity, and the value of proving the hardest architectural risks early. Git
 management and other advanced dashboard work should not begin until every
 candidate has passed the shared hosted-architecture acceptance matrix.
 
-## Open specification questions
+## Questions considered during specification
 
-The following decisions are deliberately deferred to `SPECIFICATION.md`:
+The following questions motivated the v1 specification. Some are now answered
+there, while intentionally post-v1 capabilities remain deferred:
 
 - the exact registry schema, file locations, validation, and local overrides;
 - the hosted adapter TypeScript API and version-negotiation policy;
@@ -410,6 +413,6 @@ The following decisions are deliberately deferred to `SPECIFICATION.md`:
 - cross-platform support and production host assumptions;
 - minimum standalone and hosted test contracts.
 
-After those decisions are approved, `TASKS.md` should prioritize foundational
-contracts and integration fixtures before individual application migrations,
-then finish with operations, Tailnet verification, rollout, and rollback work.
+See [TASKS.md](TASKS.md) for the approved implementation order and
+[SPECIFICATION.md](SPECIFICATION.md) for the current boundary between v1 and
+deferred work.

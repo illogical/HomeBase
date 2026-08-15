@@ -1,9 +1,9 @@
 # HomeBase
 
 HomeBase is a planned central portal for Node applications. It will provide one
-place to open current and future applications through a single Tailnet address,
-with concise top-level routes such as `/devplanner`, `/lmapi`, `/memoryapi`, and
-`/lmeval`.
+place to open current and future applications through localhost or a single
+Tailnet address, with concise top-level routes such as `/devplanner`, `/lmapi`,
+`/memoryapi`, and `/lmeval`.
 
 > [!IMPORTANT]
 > HomeBase is in the planning stage. This README describes the intended
@@ -35,7 +35,9 @@ HomeBase will load compiled JavaScript adapters rather than importing sibling
 TypeScript source trees. A hosted adapter is expected to provide the capabilities
 needed to initialize the application, mount its routes and static assets, attach
 realtime behavior to the shared server, report status, and release its resources.
-The exact adapter interface has not been specified yet.
+The v1 adapter capabilities and lifecycle guarantees are defined in the
+[specification](docs/SPECIFICATION.md); exact TypeScript types will be fixed in
+the hosted-architecture implementation plan.
 
 All hosted applications are trusted code. Although their repositories and npm
 dependencies remain separate, hosted adapters share HomeBase's process, memory,
@@ -43,8 +45,10 @@ environment, permissions, and failure boundary.
 
 ## Routing and Tailnet access
 
-HomeBase will own the only HTTP listener and Tailnet endpoint. Hosted applications
-will be mounted at top-level slugs:
+HomeBase will own the only HTTP listener. Docker will publish its
+environment-configured port on host loopback, and host-managed Tailscale Serve
+will proxy the Tailnet endpoint to that same listener. Hosted applications will
+be mounted at top-level slugs:
 
 ```text
 https://home.<tailnet>.ts.net/
@@ -61,11 +65,11 @@ policy will be defined in the specification.
 
 ## Configuration direction
 
-Applications will be registered explicitly rather than discovered by scanning
-folders. The future configuration is expected to identify an application, its
-repository and compiled adapter, its public route, whether it is enabled, and
-the metadata needed by the dashboard. The schema and loading rules remain open
-design work.
+Applications will be registered explicitly in validated JSON rather than
+discovered by scanning folders. `HOMEBASE_WORKSPACE_PATH` identifies the absolute
+mounted workspace root, and each application uses traversal-safe repository and
+adapter paths relative to that root. The in-process configuration service and
+registry contract are defined in the [specification](docs/SPECIFICATION.md).
 
 ## Initial technology baseline
 
@@ -81,23 +85,30 @@ selected during specification and implementation planning.
 
 ## Expected repository shape
 
-The precise layout is not final, but the project is expected to separate the
-HomeBase server, dashboard, shared contracts, configuration, and documentation.
-Participating applications will remain in their own repositories rather than
-moving into this repository.
+The precise implementation layout will be selected in feature plans, but the
+project will separate the HomeBase server, dashboard, shared contracts,
+configuration, writable runtime data, and documentation. Participating
+applications remain in their own repositories beneath a mounted workspace root
+rather than moving into this repository.
 
 ## Planning documents
 
 - [Background and prior architecture review](docs/BACKGROUND.md)
 - [HomeBase feature brainstorm](docs/BRAINSTORM.md)
+- [Approved v1 specification](docs/SPECIFICATION.md)
+- [Development priorities and progress](docs/TASKS.md)
+- `docs/plans/` for decision-complete implementation plans created after feature
+  alignment
 
-After this initial direction is reviewed, `docs/SPECIFICATION.md` will define
-the architecture and contracts. A later `docs/TASKS.md` will turn the approved
-specification into a prioritized implementation sequence.
+The brainstorm collects possibilities. The specification defines approved v1
+behavior, and the task index identifies current progress and the next development
+priority. Each separate project update receives an aligned implementation plan
+under `docs/plans/` and is implemented only when requested in a fresh session.
 
-## Not decided yet
+## Deferred beyond v1
 
-The configuration schema, exact hosted adapter API, authentication and
-authorization policy, application loading mechanics, update and rollback policy,
-and implementation order are intentionally deferred. They should not be treated
-as established behavior until the specification is approved.
+Per-user authentication and authorization, browser-based configuration editing,
+coordinated cross-repository hot reload, Git inspection and mutation, dependency
+installation, update and rollback automation, audit controls, and advanced portal
+features require separate expectation alignment and implementation plans. They
+must not be treated as implemented or approved v1 behavior.
