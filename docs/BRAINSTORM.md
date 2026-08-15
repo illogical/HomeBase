@@ -83,6 +83,64 @@ The future hosted contract should be capable of describing:
 The precise TypeScript interface and lifecycle ordering belong in the
 specification.
 
+## Development hot reload across repositories
+
+`npm run dev` should provide one coordinated development experience for
+HomeBase and every enabled application. A developer should be able to pull or
+edit a participating repository and see the latest valid version through its
+normal HomeBase route without starting that project's standalone server.
+
+The development host could create Vite servers in middleware mode and attach
+them to HomeBase's shared HTTP server. HomeBase would have its own Vite root for
+the portal, while each hosted frontend would retain its own Vite configuration,
+repository root, module graph, and file watcher. This keeps the applications in
+one Node process while allowing their browser code to update independently.
+
+The desired development behavior is:
+
+- a HomeBase frontend edit updates the portal through Vite HMR;
+- a hosted application's frontend edit updates only that application through
+  its top-level HomeBase route;
+- a change that cannot be hot-applied triggers a full browser refresh;
+- backend, hosted-adapter, or server configuration changes trigger a debounced
+  rebuild and graceful restart of the HomeBase development host;
+- connected browsers show a brief reconnecting state and reload when the
+  restarted host is ready;
+- a burst of file changes from `git pull` is treated as one settled change set,
+  rather than causing a restart for every changed file;
+- a failed rebuild leaves a clear error visible and does not claim that the new
+  revision is loaded.
+
+Vite does not automatically watch arbitrary sibling repositories. HomeBase must
+create and dispose the required development middleware and watchers from the
+explicit application registry. Each frontend also needs a unique base path and
+HMR WebSocket path on the shared server so updates cannot be delivered to the
+wrong application. File-serving allowlists should include only the configured
+frontend roots and continue to deny environment files, Git metadata, keys, and
+other sensitive files.
+
+Not every pull can be applied immediately:
+
+- frontend source and styles are candidates for Vite HMR;
+- backend or adapter source requires rebuilding and restarting the shared host;
+- changes to `package.json` or a lockfile may require `npm install` or `npm ci`
+  in that repository before restart;
+- build configuration, environment requirements, database migrations, and
+  native dependency changes need explicit validation;
+- deleted or renamed adapter output should make only that application
+  unavailable when degraded startup remains safe.
+
+General in-process replacement of arbitrary hosted backend modules should not be
+the default. Node module caching and application-owned routes, timers, watchers,
+sockets, database handles, and other state make safe replacement difficult to
+prove. A fast, observable whole-host development restart is the preferred
+fallback when frontend HMR is insufficient.
+
+Questions for the specification include the number and lifecycle of Vite
+middleware instances, HMR path allocation, file-watcher limits, rebuild command
+ownership, dependency-install policy, change debouncing, browser reconnection,
+and how development behavior works when accessed through the Tailnet hostname.
+
 ## Application registry
 
 HomeBase should use explicit validated configuration. Scanning arbitrary folders
@@ -206,6 +264,95 @@ The shared origin makes navigation convenient but also means applications share
 a browser security boundary. Cookie names, storage keys, service workers, CSP,
 and route ownership need coordination.
 
+## Delivery priorities
+
+Development should proceed in deliberate phases. The first milestone is not a
+feature-complete HomeBase dashboard; it is evidence that the architecture works
+for every current target application.
+
+### Phase 1: prove the hosted architecture
+
+Define the smallest viable registry and adapter contract, then validate it with
+DevPlanner, LMApi, MemoryApi, and LMEval. For each project:
+
+- establish a clean standalone install, build, test, and run baseline;
+- identify import-time listeners, global state, signal handlers, background
+  work, and path assumptions that prevent safe hosting;
+- add an import-safe compiled adapter without removing standalone operation;
+- verify top-level web, API, static asset, SPA, download, and realtime routes as
+  applicable;
+- verify explicit configuration and separate writable data paths;
+- verify initialization, status, degradation, active-work reporting, and
+  complete disposal;
+- verify frontend HMR and the development restart fallback through HomeBase;
+- document project-specific external dependencies and failure behavior.
+
+The phase is complete only when all four adapters can be loaded into the same
+HomeBase process, use the same HTTP server without route or realtime collisions,
+remain independently runnable, and pass a shared integration matrix. A missing
+or degraded optional application must not falsify the status of healthy ones.
+
+### Phase 2: refine HomeBase's core experience
+
+After the architecture is proven, focus on the portal itself: navigation,
+responsive layout, visual design, registry management, useful status and error
+states, accessibility, observability, and dependable development and production
+startup behavior.
+
+### Phase 3: add Git-aware project management
+
+Only after hosted and standalone behavior is reliable should HomeBase gain
+repository inspection, update awareness, pull controls, build verification, and
+restart orchestration. Git features must build on trustworthy adapter status and
+loaded-version reporting rather than becoming part of the initial architecture
+experiment.
+
+## Git integration
+
+The dashboard should eventually make the source and running version of each
+configured application easy to understand. Candidate read-only information
+includes:
+
+- repository and current branch;
+- checked-out commit SHA and short commit message;
+- commit recorded by the latest successful build;
+- commit currently loaded in the HomeBase process;
+- dirty working-tree state;
+- configured upstream and last successful remote check;
+- whether the branch is current, ahead, behind, diverged, or has no upstream;
+- the number and summary of commits available to pull.
+
+"Currently running" must mean the adapter revision actually loaded into memory,
+not merely the repository's current `HEAD`. Checked-out, built, and loaded
+commits can differ after a pull, failed build, or pending restart, and the
+dashboard should show those states separately.
+
+Checking for updates should be a read-only remote refresh and comparison. It
+should not change the working tree. A visible update flag can then tell the user
+that newer upstream commits are available and show when that information was
+last refreshed.
+
+A future Pull action should be an explicit, observable workflow that can explore
+the following safeguards:
+
+- allow updates only for the configured repository and expected branch;
+- detect local changes, detached `HEAD`, missing upstream, divergence, and
+  another update already in progress;
+- prefer fast-forward-only pulls rather than creating an unexpected merge;
+- determine whether manifest or lockfile changes require dependency install;
+- build and verify the new adapter before requesting a whole-host restart;
+- keep the currently loaded version available when pull, install, build, or
+  verification fails;
+- respect active work before restart;
+- record the previous and target revisions, steps, output, result, and time;
+- confirm after restart that the loaded commit matches the verified build;
+- provide a recovery or rollback path when the new revision cannot start.
+
+The specification should decide whether HomeBase performs Git mutations itself
+or delegates them to a narrowly scoped update service. Authentication, command
+timeouts, concurrent updates, self-update behavior, audit visibility, and which
+users may check or apply updates also remain open.
+
 ## Operations and observability
 
 Potential operational capabilities include:
@@ -215,6 +362,9 @@ Potential operational capabilities include:
 - startup progress and initialization timing;
 - checked-out, built, and loaded Git revisions;
 - dependency and adapter compatibility diagnostics;
+- sibling-aware development watching, frontend HMR, and full-reload fallback;
+- debounced rebuild and development-host restart after backend changes or a
+  repository pull;
 - Git pull, npm install, build, and verification workflows;
 - update staging that leaves the currently loaded version intact on failure;
 - graceful whole-host restart after a verified update;
@@ -237,8 +387,10 @@ The first applications expected to explore the hosted model are:
 - LMEval.
 
 HomeBase should not require every candidate to be installed or healthy. The
-migration order should be chosen later from dependency relationships, adapter
-complexity, and the value of proving the hardest architectural risks early.
+migration order should be chosen from dependency relationships, adapter
+complexity, and the value of proving the hardest architectural risks early. Git
+management and other advanced dashboard work should not begin until every
+candidate has passed the shared hosted-architecture acceptance matrix.
 
 ## Open specification questions
 
@@ -252,6 +404,8 @@ The following decisions are deliberately deferred to `SPECIFICATION.md`:
 - authentication, authorization, browser security, and Tailnet trust boundaries;
 - health, readiness, degradation, retry, and fatal-error behavior;
 - logging, status persistence, metrics, and audit events;
+- Git repository inspection, remote update checks, pull safeguards, and
+  checked-out/built/loaded revision tracking;
 - update, restart, active-work, rollback, and external launcher behavior;
 - cross-platform support and production host assumptions;
 - minimum standalone and hosted test contracts.
