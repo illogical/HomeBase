@@ -124,16 +124,7 @@ main:focus {
 
 .introduction {
   max-width: 760px;
-  margin-bottom: 48px;
-}
-
-.eyebrow {
-  margin: 0 0 12px;
-  color: var(--accent);
-  font-size: 0.75rem;
-  font-weight: 750;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  margin-bottom: 32px;
 }
 
 h1,
@@ -151,45 +142,17 @@ h1 {
   letter-spacing: -0.035em;
 }
 
-.lede {
-  max-width: 640px;
-  margin: 20px 0 0;
-  color: var(--muted);
-  font-size: clamp(1rem, 2vw, 1.125rem);
-  line-height: 1.65;
-}
-
 .prototype-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-top: 32px;
-  padding: 16px;
+  display: inline-block;
+  margin-top: 16px;
+  padding: 6px 12px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--surface);
-}
-
-.prototype-notice p {
-  margin: 0;
   color: var(--muted);
-  font-size: 0.9rem;
-  line-height: 1.55;
-}
-
-.notice-marker {
-  display: grid;
-  place-items: center;
-  flex: 0 0 22px;
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--accent);
-  border-radius: 50%;
-  color: var(--accent);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.75rem;
-  font-weight: 800;
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
 .collection-heading {
@@ -394,6 +357,13 @@ h1 {
   to { opacity: 0.9; }
 }
 
+/*
+ * Responsive targets verified for this layout:
+ * - Phone (consolidated single column): ~375-428px wide, e.g. 375x812.
+ * - iPad mini, portrait: 768x1024 -> falls in this 2-column band.
+ * - iPad mini, landscape: 1024x768 -> falls in the 3-column band below.
+ * - Desktop: 1440x900+, content capped at ~1200px.
+ */
 @media (min-width: 640px) {
   .header-inner,
   main {
@@ -417,7 +387,7 @@ h1 {
   }
 
   .introduction {
-    margin-bottom: 40px;
+    margin-bottom: 28px;
   }
 
   .collection-heading {

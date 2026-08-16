@@ -33,9 +33,9 @@ authorization to implement the item.
 
 ## Current priority
 
-Phase 1 is complete, so Phase 2 is the next priority. Do not begin Phase 3 merely
-to make the static Phase 2 prototype look complete: fixture data is intentional
-until configuration API behavior has its own approved plan.
+Phases 1 and 2 are complete, so Phase 3 is the next priority. Phase 3 has an
+approved plan (see below); implement it in a separate, fresh session per this
+file's workflow.
 
 ## Phase 1: Configuration foundation
 
@@ -62,8 +62,9 @@ until configuration API behavior has its own approved plan.
 
 ## Phase 2: Static frontend prototype
 
-**Status:** In progress
-**Plan:** [static frontend prototype](plans/2026-08-15-static-frontend-prototype.md)
+**Status:** Done
+**Plans:** [static frontend prototype](plans/2026-08-15-static-frontend-prototype.md),
+[dashboard hero and responsive refinement](plans/2026-08-15-dashboard-hero-and-responsive-refinement.md)
 
 - [x] Create the React and Vite dashboard shell using static fixture applications.
 - [x] Apply a restrained dark visual system with neutral, warm, and natural accents.
@@ -72,16 +73,20 @@ until configuration API behavior has its own approved plan.
   contrast.
 - [x] Demonstrate loading, empty, disabled, ready, degraded, and unavailable states.
 - [x] Keep the data seam explicit so fixtures can be replaced in Phase 3.
+- [x] Trim the hero/introduction content to a heading and a compact prototype
+  notice, and verify the responsive layout explicitly against phone, iPad mini
+  (portrait and landscape), and desktop viewports.
 
-- [ ] **Acceptance gate:** The production frontend build succeeds; automated
+- [x] **Acceptance gate:** The production frontend build succeeds; automated
   component and accessibility checks pass; and manual viewport/keyboard review
-  verifies every required state without claiming live configuration or status
+  verifies every required state, the phone/iPad-mini/desktop layout matrix,
+  and the trimmed hero content without claiming live configuration or status
   integration.
 
 ## Phase 3: Configuration and status integration
 
 **Status:** Not started  
-**Plan:** pending
+**Plan:** [Phase 3 configuration and status API](plans/2026-08-15-phase-3-configuration-status-api.md)
 
 - [ ] Define stable read-only application-listing and status response types.
 - [ ] Expose sanitized registry metadata without filesystem or adapter details.

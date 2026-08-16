@@ -6,11 +6,11 @@ Tailnet address, with concise top-level routes such as `/devplanner`, `/lmapi`,
 `/memoryapi`, and `/lmeval`.
 
 > [!IMPORTANT]
-> The Phase 1 configuration runtime is complete. The Phase 2 static dashboard
-> prototype is implemented with automated and live HTTP checks, while its manual
-> browser acceptance matrix remains pending. Live dashboard data, hosted
-> adapters, public APIs, Docker packaging, and Tailnet rollout remain planned
-> work unless stated otherwise.
+> The Phase 1 configuration runtime and the Phase 2 static dashboard prototype
+> are both complete, verified with automated checks and a scripted headless-
+> browser matrix across phone, iPad mini (portrait and landscape), and desktop
+> viewports. Live dashboard data, hosted adapters, public APIs, Docker
+> packaging, and Tailnet rollout remain planned work unless stated otherwise.
 
 ## Project goals
 

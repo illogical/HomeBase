@@ -45,20 +45,6 @@ export function App({ dataSource }: AppProps) {
         </div>
       </header>
       <main id="applications" ref={mainRef} tabIndex={-1}>
-        <section className="introduction" aria-labelledby="page-title">
-          <p className="eyebrow">Your applications, one place</p>
-          <h1 id="page-title">Application dashboard</h1>
-          <p className="lede">
-            A focused starting point for the tools that support your local development work.
-          </p>
-          <aside className="prototype-notice" aria-label="Prototype data notice">
-            <span className="notice-marker" aria-hidden="true">i</span>
-            <p>
-              Prototype preview: applications, statuses, and routes below are sample data.
-              Nothing on this page reflects a running process yet.
-            </p>
-          </aside>
-        </section>
         <ApplicationCollection applications={applications} error={error} />
       </main>
     </>
