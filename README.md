@@ -1,13 +1,14 @@
 # HomeBase
 
-HomeBase is a planned central portal for Node applications. It will provide one
+HomeBase is a central portal for Node applications. It will provide one
 place to open current and future applications through localhost or a single
 Tailnet address, with concise top-level routes such as `/devplanner`, `/lmapi`,
 `/memoryapi`, and `/lmeval`.
 
 > [!IMPORTANT]
-> HomeBase is in the planning stage. This README describes the intended
-> direction, not an implemented or verified system.
+> The Phase 1 configuration runtime is implemented and tested. The dashboard,
+> hosted adapters, public APIs, Docker packaging, and Tailnet rollout described
+> below remain planned work unless stated otherwise.
 
 ## Project goals
 
@@ -71,6 +72,49 @@ mounted workspace root, and each application uses traversal-safe repository and
 adapter paths relative to that root. The in-process configuration service and
 registry contract are defined in the [specification](docs/SPECIFICATION.md).
 
+`ConfigService` is the server's single source of effective configuration. It
+validates the entire registry before the listener starts and exposes one
+immutable object model to dependent classes through constructor injection.
+Precedence is built-in defaults, `homebase.json`, then environment variables.
+
+## Local setup
+
+HomeBase requires Node.js 24 and npm. From a clean clone:
+
+```sh
+npm ci
+cp .env.example .env
+cp config/homebase.example.json config/homebase.json
+```
+
+Edit `.env` so `HOMEBASE_WORKSPACE_PATH` is the absolute directory containing
+the registered application repositories. On this development machine, for
+example:
+
+```dotenv
+HOMEBASE_WORKSPACE_PATH=/Users/matt/dev/projects
+```
+
+Then edit the ignored `config/homebase.json` and run:
+
+```sh
+npm run typecheck
+npm test
+npm run dev
+```
+
+The root `.env` and operational registry are intentionally ignored. The tracked
+`.env.example` and `config/homebase.example.json` are safe starting points.
+`HOMEBASE_PORT` optionally overrides `server.port`, while
+`HOMEBASE_CONFIG_PATH` selects another registry using either an absolute path or
+a path relative to the HomeBase repository root. Invalid overrides prevent
+startup rather than silently falling back.
+
+The workspace path is interpreted by the running Node process. A future Docker
+deployment might mount the host projects directory at `/workspace` and set
+`HOMEBASE_WORKSPACE_PATH=/workspace`; it should not reuse a host-only absolute
+path inside the container.
+
 ## Initial technology baseline
 
 - Node.js 24
@@ -80,8 +124,9 @@ registry contract are defined in the [specification](docs/SPECIFICATION.md).
 - React
 - Vite
 
-Exact package versions, supporting libraries, and compatibility rules will be
-selected during specification and implementation planning.
+The Phase 1 server uses strict TypeScript, Express 5, Ajv Draft 2020-12
+validation, and Vitest. React and Vite remain part of the planned frontend
+baseline.
 
 ## Expected repository shape
 

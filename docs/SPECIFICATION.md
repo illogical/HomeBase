@@ -63,6 +63,13 @@ Node process. In Docker it identifies the mounted root whose immediate or nested
 children contain the participating Git repositories. Registry `repoPath` values
 are always relative to this root.
 
+For local host development, npm scripts optionally load a root `.env`; values
+already present in the process environment take precedence. The tracked
+`.env.example` documents the supported variables, while `.env` and its local
+variants remain ignored. A host path such as `/Users/matt/dev/projects` and a
+future container path such as `/workspace` may identify the same mounted content
+but are separate runtime values.
+
 Repository source and build output are distinct from mutable runtime data. Each
 hosted application receives an explicit application-scoped writable data path.
 No application may infer writable storage from the process working directory or
@@ -87,6 +94,20 @@ The configuration service is an in-process HomeBase server module. It:
   entries; and
 - never discovers or executes code merely because a folder or `package.json`
   exists.
+
+The implemented `ConfigService` is constructed asynchronously once at the
+composition root and supplied to dependants through constructor injection. No
+other class reads the registry or environment directly. It publishes a deeply
+immutable model containing effective server settings, resolved runtime paths,
+compatibility versions, and normalized application records.
+
+Configuration precedence is built-in defaults, the selected JSON registry, and
+then environment overrides. Built-in defaults include port `17106`, the
+project-root-relative `config/homebase.json`, schema and hosted-contract version
+`1`, and Node major `24`. The registry remains required: defaults do not hide a
+missing or invalid file. `HOMEBASE_WORKSPACE_PATH` has no default. Relative
+`HOMEBASE_CONFIG_PATH` values resolve from the HomeBase project root rather than
+the process working directory.
 
 The tracked schema is [homebase.schema.json](../config/homebase.schema.json), and
 the safe public template is

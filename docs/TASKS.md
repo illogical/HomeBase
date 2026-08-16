@@ -1,9 +1,9 @@
 # HomeBase Development Tasks
 
 > [!IMPORTANT]
-> This file owns current progress and upcoming development priority. HomeBase is
-> presently documentation-only; none of the implementation phases below have
-> been runtime-verified.
+> This file owns current progress and upcoming development priority. HomeBase
+> has a completed, runtime-verified Phase 1 configuration foundation. Later
+> implementation phases remain incomplete unless their own tasks say otherwise.
 
 ## How to use this task index
 
@@ -33,27 +33,28 @@ authorization to implement the item.
 
 ## Current priority
 
-Start with Phase 1. Do not begin Phase 3 merely to make the static Phase 2
-prototype look complete: fixture data is intentional until configuration API
-behavior has its own approved plan.
+Phase 1 is complete, so Phase 2 is the next priority. Do not begin Phase 3 merely
+to make the static Phase 2 prototype look complete: fixture data is intentional
+until configuration API behavior has its own approved plan.
 
 ## Phase 1: Configuration foundation
 
-**Status:** In progress
+**Status:** Done
 
-**Plan:** [Compact configuration schema and samples](plans/2026-08-15-configuration-schema-and-samples.md)
+**Plans:** [Compact configuration schema and samples](plans/2026-08-15-configuration-schema-and-samples.md),
+[Phase 1 configuration runtime foundation](plans/2026-08-15-phase-1-configuration-runtime.md)
 
-- [ ] Scaffold the Node 24, TypeScript, Express 5 server and its test harness.
-- [ ] Implement the in-process JSON configuration service.
+- [x] Scaffold the Node 24, TypeScript, Express 5 server and its test harness.
+- [x] Implement the in-process JSON configuration service.
 - [x] Add the Draft 2020-12 registry schema, a tracked generic example, and an
   ignored local registry containing DevPlanner, LMApi, MemoryApi, and LMEval.
-- [ ] Validate schema and contract versions, unique IDs/slugs, reserved routes, and
+- [x] Validate schema and contract versions, unique IDs/slugs, reserved routes, and
   traversal-safe workspace-relative repository and adapter paths.
-- [ ] Normalize valid records into an immutable internal representation without
+- [x] Normalize valid records into an immutable internal representation without
   importing application code.
-- [ ] Add tests for valid configuration and every required rejection case.
+- [x] Add tests for valid configuration and every required rejection case.
 
-- [ ] **Acceptance gate:** A clean test run proves that valid sample configuration
+- [x] **Acceptance gate:** A clean test run proves that valid sample configuration
   is loaded deterministically and unsafe or incompatible configuration prevents
   startup with actionable errors. No folder is treated as executable
   configuration through discovery.
