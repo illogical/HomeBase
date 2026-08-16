@@ -42,7 +42,8 @@ until configuration API behavior has its own approved plan.
 **Status:** Done
 
 **Plans:** [Compact configuration schema and samples](plans/2026-08-15-configuration-schema-and-samples.md),
-[Phase 1 configuration runtime foundation](plans/2026-08-15-phase-1-configuration-runtime.md)
+[Phase 1 configuration runtime foundation](plans/2026-08-15-phase-1-configuration-runtime.md),
+[cross-platform configuration filesystem tests](plans/2026-08-15-cross-platform-configuration-tests.md)
 
 - [x] Scaffold the Node 24, TypeScript, Express 5 server and its test harness.
 - [x] Implement the in-process JSON configuration service.

@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
@@ -15,6 +15,7 @@ import {
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const fixtures: ConfigFixture[] = [];
+const directoryLinkType = process.platform === "win32" ? "junction" : "dir";
 
 afterEach(async () => {
   await Promise.all(fixtures.splice(0).map((fixture) => fixture.cleanup()));
@@ -197,15 +198,19 @@ describe("ConfigService", () => {
     await expectIssue(load(current), "CONFIG_JSON_INVALID", "configurationFile");
   });
 
-  it("reports an unreadable registry as a file-read failure", async () => {
+  it("reports a non-file registry path as a file-read failure", async () => {
     const current = await fixture();
-    await current.writeRegistry(validRegistry());
-    await chmod(current.configFile, 0o000);
-    try {
-      await expectIssue(load(current), "CONFIG_FILE_READ_FAILED", "configurationFile");
-    } finally {
-      await chmod(current.configFile, 0o600);
-    }
+    const registryDirectory = path.join(current.projectRoot, "settings");
+    await mkdir(registryDirectory);
+
+    await expectIssue(
+      load(current, {
+        HOMEBASE_WORKSPACE_PATH: current.workspaceRoot,
+        HOMEBASE_CONFIG_PATH: registryDirectory,
+      }),
+      "CONFIG_FILE_READ_FAILED",
+      "configurationFile",
+    );
   });
 
   it.each([
@@ -313,7 +318,11 @@ describe("ConfigService", () => {
     const current = await fixture();
     const outside = path.join(current.root, "outside");
     await mkdir(outside);
-    await symlink(outside, path.join(current.workspaceRoot, "EscapingRepo"));
+    await symlink(
+      outside,
+      path.join(current.workspaceRoot, "EscapingRepo"),
+      directoryLinkType,
+    );
     const registry = validRegistry();
     registry.applications[0]!.repoPath = "EscapingRepo";
     await current.writeRegistry(registry);
@@ -321,7 +330,11 @@ describe("ConfigService", () => {
 
     registry.applications[0]!.repoPath = "ContainedRepo";
     await mkdir(path.join(current.workspaceRoot, "ContainedRepo"));
-    await symlink(outside, path.join(current.workspaceRoot, "ContainedRepo/dist"));
+    await symlink(
+      outside,
+      path.join(current.workspaceRoot, "ContainedRepo/dist"),
+      directoryLinkType,
+    );
     await current.writeRegistry(registry);
     await expectIssue(load(current), "PATH_ESCAPES_PARENT", "/applications/0/adapterPath");
   });
