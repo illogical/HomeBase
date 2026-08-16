@@ -155,6 +155,17 @@ describe("ApplicationHost mounting and isolation", () => {
     expect(response.headers.location).toBe("/routes-app/");
   });
 
+  it("does not redirect an already-canonical trailing-slash request", async () => {
+    const fixture = await buildFixture();
+    const { host } = await loadHost(fixture, [{ id: "static-app", adapter: "static-assets" }]);
+    const app = express();
+    host.mountAll(app);
+
+    const response = await request(app).get("/static-app/").redirects(0);
+    expect(response.status).toBe(200);
+    expect(response.text).toContain("static-assets fixture index");
+  });
+
   it("returns a scoped 503 with sanitized state for an unavailable application", async () => {
     const fixture = await buildFixture();
     const { host } = await loadHost(fixture, [{ id: "throws-app", adapter: "throws-on-import" }]);

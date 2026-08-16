@@ -363,7 +363,11 @@ async function loadOne(
 
 function mountApplication(app: Express, record: ApplicationRecord): void {
   const { basePath, slug } = record.application;
-  app.get(`/${slug}`, (_request, response) => {
+  app.get(`/${slug}`, (request, response, next) => {
+    if (request.path === basePath) {
+      next();
+      return;
+    }
     response.redirect(308, basePath);
   });
 
