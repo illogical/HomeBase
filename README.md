@@ -6,9 +6,11 @@ Tailnet address, with concise top-level routes such as `/devplanner`, `/lmapi`,
 `/memoryapi`, and `/lmeval`.
 
 > [!IMPORTANT]
-> The Phase 1 configuration runtime is implemented and tested. The dashboard,
-> hosted adapters, public APIs, Docker packaging, and Tailnet rollout described
-> below remain planned work unless stated otherwise.
+> The Phase 1 configuration runtime is complete. The Phase 2 static dashboard
+> prototype is implemented with automated and live HTTP checks, while its manual
+> browser acceptance matrix remains pending. Live dashboard data, hosted
+> adapters, public APIs, Docker packaging, and Tailnet rollout remain planned
+> work unless stated otherwise.
 
 ## Project goals
 
@@ -103,6 +105,37 @@ npm test
 npm run dev
 ```
 
+The development command serves the React dashboard and Vite HMR through the
+same Express listener. Open `http://localhost:<effective-port>/`, where the
+effective port is `HOMEBASE_PORT` when set, otherwise `server.port` from the
+selected registry (the example registry uses `17106`). Vite does not open a
+second user-facing port.
+
+Phase 2 uses static sample data only. These URLs preview its three fixture
+scenarios:
+
+```text
+http://localhost:<effective-port>/?fixture=mixed
+http://localhost:<effective-port>/?fixture=loading
+http://localhost:<effective-port>/?fixture=empty
+```
+
+Unknown `fixture` values use `mixed`. Application routes are shown for context
+but are deliberately not clickable, and the displayed statuses do not describe
+real processes.
+
+To view the production build on the same configured listener:
+
+```sh
+npm run build
+npm start
+```
+
+Phase 2 does not include Docker packaging. On Windows, install Node.js 24, use
+the same local configuration files, and run `npm ci`, `npm run typecheck`,
+`npm test`, `npm run build`, and `npm start` before reviewing the fixture URLs
+in a browser. Docker and Tailnet verification are deferred to Phase 6.
+
 The root `.env` and operational registry are intentionally ignored. The tracked
 `.env.example` and `config/homebase.example.json` are safe starting points.
 `HOMEBASE_PORT` optionally overrides `server.port`, while
@@ -125,8 +158,9 @@ path inside the container.
 - Vite
 
 The Phase 1 server uses strict TypeScript, Express 5, Ajv Draft 2020-12
-validation, and Vitest. React and Vite remain part of the planned frontend
-baseline.
+validation, and Vitest. The Phase 2 dashboard uses React and Vite with a
+separate browser TypeScript configuration and production output beneath
+`dist/dashboard`.
 
 ## Expected repository shape
 

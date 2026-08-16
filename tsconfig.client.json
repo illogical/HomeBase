@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": ["dashboard/src/**/*.ts", "dashboard/src/**/*.tsx", "dashboard/test/**/*.ts"]
+}

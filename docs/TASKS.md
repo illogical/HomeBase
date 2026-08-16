@@ -61,16 +61,16 @@ until configuration API behavior has its own approved plan.
 
 ## Phase 2: Static frontend prototype
 
-**Status:** Not started  
-**Plan:** pending
+**Status:** In progress
+**Plan:** [static frontend prototype](plans/2026-08-15-static-frontend-prototype.md)
 
-- [ ] Create the React and Vite dashboard shell using static fixture applications.
-- [ ] Apply a restrained dark visual system with neutral, warm, and natural accents.
-- [ ] Implement responsive desktop, tablet, and mobile card layouts.
-- [ ] Provide keyboard navigation, semantic structure, visible focus, and appropriate
+- [x] Create the React and Vite dashboard shell using static fixture applications.
+- [x] Apply a restrained dark visual system with neutral, warm, and natural accents.
+- [x] Implement responsive desktop, tablet, and mobile card layouts.
+- [x] Provide keyboard navigation, semantic structure, visible focus, and appropriate
   contrast.
-- [ ] Demonstrate loading, empty, disabled, ready, degraded, and unavailable states.
-- [ ] Keep the data seam explicit so fixtures can be replaced in Phase 3.
+- [x] Demonstrate loading, empty, disabled, ready, degraded, and unavailable states.
+- [x] Keep the data seam explicit so fixtures can be replaced in Phase 3.
 
 - [ ] **Acceptance gate:** The production frontend build succeeds; automated
   component and accessibility checks pass; and manual viewport/keyboard review
