@@ -95,6 +95,49 @@ application-specific configuration, and scoped logger. The plan should map
 DevPlanner's actual needs to those inputs and flag any missing HomeBase contract
 capability.
 
+## Standalone and hosted logging modes
+
+Use HomeBase's draft
+[logging and OpenTelemetry evolution intentions](../../features/2026-08-15-logging-and-opentelemetry-intentions.md)
+as an additional planning input. It does not authorize implementation or replace
+DevPlanner source inspection, but the DevPlanner plan must preserve its mode and
+lifecycle boundaries.
+
+DevPlanner application components should depend on a small structured logger
+contract or a DevPlanner-local facade with equivalent semantics. They must not
+choose a file path, create a transport, or depend directly on HomeBase's concrete
+logging library.
+
+- In standalone mode, DevPlanner's composition root creates and owns its logger,
+  writes newline-delimited structured JSON to an explicit DevPlanner-owned local
+  log path, binds the DevPlanner application ID and a unique runtime-instance ID,
+  and performs the final bounded flush during process shutdown.
+- In hosted mode, the import-safe adapter accepts HomeBase's already scoped
+  logger. It must not open its own log file, start a transport worker, install
+  process logging handlers, or close HomeBase's root logger.
+- Standalone DevPlanner and a HomeBase-hosted DevPlanner may run concurrently,
+  but they must use different active files and runtime-instance IDs. Independent
+  processes must never append to or rotate the same active file.
+- Both modes use the same event names, severity rules, application/component
+  fields, sanitization policy, and request or operation correlation. The initial
+  record model reserves valid trace and span fields for later OpenTelemetry
+  integration rather than inventing trace IDs.
+- Server-side logging must not include raw card or vault content, prompts,
+  credentials, environment values, unredacted child-process commands/output, or
+  unnecessary absolute repository paths.
+- Browser console logging is separate from the initial server log. Browser log
+  forwarding is deferred unless the DevPlanner planning session aligns it as a
+  distinct capability.
+- MCP stdio diagnostics must not be written to protocol stdout. Preserve stderr
+  or an explicitly configured MCP-owned file sink without creating a logging
+  resource merely by importing shared modules.
+
+The planning session must inventory direct `console.*` calls and logging in
+watchers, WebSockets, history, Git/worktree operations, dispatch children,
+backups, vault operations, routes, and shutdown. It must decide how logger and
+request/operation context reach each subsystem while preserving standalone and
+hosted parity.
+
 ## Import-safety boundary
 
 Merely importing the compiled adapter must not:
@@ -203,6 +246,9 @@ Resolve these from source evidence and user alignment:
     any temporary dual-runtime support is justified.
 11. The HomeBase contract artifacts that must exist before DevPlanner integration
     can be completed or verified.
+12. The DevPlanner logger facade, standalone local-file ownership, hosted logger
+    injection, OpenTelemetry-oriented field mapping, request/operation context,
+    redaction, rotation/retention, pressure behavior, and bounded flush policy.
 
 If a proposed answer conflicts with an approved DevPlanner contract or the
 HomeBase requirements above, stop and surface the conflict. Do not silently pick
@@ -250,6 +296,14 @@ At minimum, plan verification for:
 - shutdown during active work according to the aligned policy;
 - no leftover listener, watcher, timer, socket, lock, child process, or other open
   handle after disposal; and
+- matching structured event semantics in standalone and hosted modes, with
+  separate files and runtime-instance IDs when both modes run concurrently;
+- no hosted adapter-owned log sink or import-time logging resource;
+- canary secrets and sensitive DevPlanner content absent from local file and
+  mirrored console output;
+- bounded logger flush and no remaining logger stream, worker, or timer after
+  standalone shutdown or hosted disposal;
+- MCP stdio protocol stdout remains free of diagnostic log records; and
 - integration against the actual shared HomeBase contract and server once those
   artifacts exist.
 

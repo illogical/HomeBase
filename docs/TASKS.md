@@ -103,7 +103,9 @@ until configuration API behavior has its own approved plan.
 - [ ] Add independent fixture adapters for routes, static assets, SPA fallback,
   WebSockets, Socket.IO, degradation, failure, active work, and cleanup.
 - [ ] Verify route, filesystem, browser-origin, and shared-server isolation rules.
-- [ ] Implement bounded graceful shutdown and structured application-scoped logging.
+- [ ] Implement bounded graceful shutdown and structured application-scoped logging
+  consistent with the draft
+  [logging and OpenTelemetry evolution intentions](features/2026-08-15-logging-and-opentelemetry-intentions.md).
 
 - [ ] **Acceptance gate:** Fixtures prove import safety, deterministic realtime
   ownership, reverse-order idempotent disposal, no open handles, safe degraded
@@ -158,6 +160,10 @@ before any repository changes:
 - [ ] Read-only Git checkout, upstream, build, and loaded-revision visibility.
 - [ ] Git pull, dependency installation, build verification, restart, and rollback.
 - [ ] Per-user authentication and authorization, audit events, and administration.
+- [ ] Centralized observability, OpenTelemetry collection, Git-revision
+  correlation, and read-only HomeBase log/metric/trace views — **Not started** —
+  Intentions:
+  [logging and OpenTelemetry evolution](features/2026-08-15-logging-and-opentelemetry-intentions.md)
 - [ ] Search, favorites, recent applications, version details, and operational
   controls where they improve the portal.
 
