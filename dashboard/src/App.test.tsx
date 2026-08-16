@@ -12,10 +12,6 @@ describe("dashboard application", () => {
   it("renders the semantic mixed fixture without launch controls", async () => {
     render(<App dataSource={new FixtureDashboardDataSource("mixed")} />);
 
-    expect(screen.getByRole("heading", { level: 1, name: "Application dashboard" })).toBeInTheDocument();
-    expect(screen.getByRole("complementary", { name: "Prototype data notice" })).toHaveTextContent(
-      "sample data",
-    );
     const list = await screen.findByRole("list");
     const cards = within(list).getAllByRole("article");
     expect(cards).toHaveLength(4);
@@ -98,14 +94,41 @@ describe("dashboard application", () => {
     },
   );
 
-  it("shows a quiet empty-state failure for unexpected data-source errors", async () => {
+  it("has no automated accessibility violations in the failure/retry state", async () => {
     const dataSource: DashboardDataSource = {
       listApplications: vi.fn(async () => Promise.reject(new Error("fixture failure"))),
     };
+    const { container } = render(<App dataSource={dataSource} />);
+    await screen.findByRole("button", { name: "Retry loading applications" });
+
+    const result = await axe.run(container);
+    expect(result.violations).toEqual([]);
+  });
+
+  it("shows a quiet empty-state failure with a keyboard-operable retry control for unexpected data-source errors", async () => {
+    const dataSource: DashboardDataSource = {
+      listApplications: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("fixture failure"))
+        .mockResolvedValueOnce(
+          await new FixtureDashboardDataSource("mixed").listApplications(),
+        ),
+    };
+    const user = userEvent.setup();
     render(<App dataSource={dataSource} />);
 
     expect(
       await screen.findByRole("heading", { level: 2, name: "Sample applications could not be loaded" }),
     ).toBeInTheDocument();
+    const retryButton = screen.getByRole("button", { name: "Retry loading applications" });
+
+    await user.tab();
+    await user.tab();
+    expect(retryButton).toHaveFocus();
+
+    await user.click(retryButton);
+
+    expect(await screen.findByRole("heading", { level: 3, name: "DevPlanner" })).toBeInTheDocument();
+    expect(dataSource.listApplications).toHaveBeenCalledTimes(2);
   });
 });

@@ -122,37 +122,10 @@ main:focus {
   outline-offset: 4px;
 }
 
-.introduction {
-  max-width: 760px;
-  margin-bottom: 32px;
-}
-
-h1,
 h2,
 h3,
 p {
   overflow-wrap: anywhere;
-}
-
-h1 {
-  max-width: 680px;
-  margin: 0;
-  font-size: clamp(2rem, 6vw, 3.75rem);
-  line-height: 1.05;
-  letter-spacing: -0.035em;
-}
-
-.prototype-notice {
-  display: inline-block;
-  margin-top: 16px;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.5;
 }
 
 .collection-heading {
@@ -384,10 +357,6 @@ h1 {
 @media (max-width: 480px) {
   main {
     padding-block: 40px 56px;
-  }
-
-  .introduction {
-    margin-bottom: 28px;
   }
 
   .collection-heading {

@@ -1,16 +1,21 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { DashboardApplication, DashboardDataSource } from "./models";
 
 interface ApplicationLoadState {
   readonly applications: readonly DashboardApplication[] | null;
   readonly error: boolean;
+  readonly retry: () => void;
 }
 
 export function useApplications(dataSource: DashboardDataSource): ApplicationLoadState {
-  const [state, setState] = useState<ApplicationLoadState>({
+  const [state, setState] = useState<{
+    readonly applications: readonly DashboardApplication[] | null;
+    readonly error: boolean;
+  }>({
     applications: null,
     error: false,
   });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -34,9 +39,13 @@ export function useApplications(dataSource: DashboardDataSource): ApplicationLoa
       active = false;
       controller.abort();
     };
-  }, [dataSource]);
+  }, [dataSource, attempt]);
 
-  return state;
+  const retry = useCallback(() => {
+    setAttempt((current) => current + 1);
+  }, []);
+
+  return { ...state, retry };
 }
 
 function isAbortError(error: unknown): boolean {

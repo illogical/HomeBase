@@ -1,6 +1,6 @@
 # Phase 3 Configuration and Status API Integration
 
-**Status:** Not started
+**Status:** Complete
 
 **Approved:** 2026-08-15
 
@@ -255,3 +255,59 @@ export class HttpDashboardDataSource implements DashboardDataSource {
 - Assumes the current local `config/homebase.json` (ignored, developer-owned)
   remains a safe non-secret local file for manual verification; no production
   secrets are introduced by this plan.
+
+## Implementation record
+
+Implemented on 2026-08-16:
+
+- Found the hero/responsive-trim dependency was not actually satisfied: the
+  prior commit deleted the entire `.introduction` section (including the
+  `h1`) from `App.tsx` instead of trimming it to the compact version its own
+  plan specified, leaving `App.test.tsx` failing on a clean checkout. Restored
+  the `h1`/`.prototype-notice` markup exactly as that plan's example
+  specified before starting Phase 3 work, since Phase 3 explicitly depends on
+  a finished Phase 2 UI.
+- `src/routes/applications.ts`: `createApplicationsRouter` maps each
+  `ApplicationConfiguration` field-by-field to an `ApplicationListingEntry`
+  (`disabled`/`unavailable` only, per the status-honesty constraint), sorted
+  by `sortOrder` (undefined last) then `displayName`, with
+  `Cache-Control: no-store`.
+- `src/routes/health.ts`: trivial `GET /health` / `GET /ready` returning
+  `{ status: "ok" }` / `{ status: "ready" }`.
+- `src/app.ts`: mounts both routers (applications under `/api`) ahead of
+  dashboard hosting.
+- `test/routes/applications.test.ts` and `test/routes/health.test.ts`: assert
+  exact sanitized JSON shape, absence of private fields (including the raw
+  workspace path) anywhere in the response text, sort order, and headers.
+- `dashboard/src/httpDataSource.ts`: `HttpDashboardDataSource` fetches
+  `/api/applications`, defensively validates shape/known `state` values, and
+  freezes the result; unit tests cover success, non-2xx, malformed payload,
+  network failure, and abort.
+- `dashboard/src/useApplications.ts`: added a `retry()` action (bumps an
+  attempt counter that re-runs the existing abort-aware load effect).
+- `dashboard/src/App.tsx`: added a "Retry loading applications" button to the
+  failure branch of `ApplicationCollection`, wired to `retry()`.
+  `App.test.tsx` extended to cover keyboard-reachability, a failing-then-
+  recovering retry flow, and an axe-core sweep of the failure/retry state.
+- `dashboard/src/main.tsx`: now renders `HttpDashboardDataSource`
+  unconditionally; removed the `?fixture=` production wiring.
+  `dashboard/src/fixtures.ts`/`fixtures.test.ts` are unchanged and remain as
+  direct-import test infrastructure only.
+- Commands: `npm run typecheck`, `npm test` (8 files, 87 tests), and
+  `npm run build` all passed.
+- Manual verification: ran `npm run build && npm start` against the local
+  `config/homebase.json` (all four sample applications `enabled: false`).
+  Confirmed `GET /api/applications` returns all four as `disabled` with the
+  expected sanitized shape and `Cache-Control: no-store`; confirmed
+  `repoPath`/`repositoryRoot`/`adapterPath`/`adapterFile` and the raw
+  workspace path never appear in the response; confirmed `GET /health` and
+  `GET /ready` both return `200` with minimal bodies and no path/config
+  detail. Did not have an interactive GUI browser available in this session,
+  so the dashboard's rendered retry-recovery flow was verified through the
+  automated `App.test.tsx` retry test (fails once, then a successful retry
+  replaces the failure heading with the rendered list) rather than a live
+  stop/restart browser session; a human spot-check of that flow in a real
+  browser is a reasonable follow-up before Phase 4 work begins.
+- `README.md` and `docs/SPECIFICATION.md` §4.2/§6 updated per the
+  implementation sequence; `docs/TASKS.md` Phase 3 checked off and marked
+  `Done`.

@@ -239,17 +239,22 @@ unavailable response rather than another application's SPA.
 
 V1 reserves these HomeBase-owned API capabilities:
 
-- a public, read-only application listing containing presentation metadata,
-  public base path, and sanitized availability;
-- a public, read-only application status lookup containing state, summary, and
-  last transition time; and
-- health and readiness endpoints for container and Tailnet verification.
+- `GET /api/applications` — a public, read-only application listing containing
+  presentation metadata, public base path, and sanitized availability (`id`,
+  `displayName`, `description`, `basePath`, `state`, `statusSummary`); and
+- `GET /health` and `GET /ready` — health and readiness endpoints for
+  container and Tailnet verification.
 
-The exact URLs and JSON wire shapes will be fixed by the configuration-integration
-implementation plan. Public responses must not expose repository paths, adapter
-paths, environment variables, stack traces, dependency credentials, or raw
-configuration. V1 provides no create, update, delete, reload, Git, build, or
-restart endpoint.
+Public responses must not expose repository paths, adapter paths, environment
+variables, stack traces, dependency credentials, or raw configuration. V1
+provides no create, update, delete, reload, Git, build, or restart endpoint.
+
+Until HomeBase imports hosted adapters (Phase 4), `GET /api/applications` can
+only truthfully report two of the states in §6: `disabled` (the registry entry
+has `enabled: false`) and `unavailable` (the registry entry has
+`enabled: true`, but hosted-adapter loading is not implemented yet). It must
+not fabricate `ready`, `degraded`, `initializing`, or `stopping` from
+`enabled: true` configuration alone.
 
 ### 4.3 Shared browser origin
 
@@ -321,6 +326,10 @@ Public summaries are sanitized; full diagnostic errors go only to structured
 logs. A missing, incompatible, or failed optional adapter does not falsify the
 status of healthy applications and does not prevent the HomeBase dashboard from
 starting.
+
+Before hosted-adapter loading exists (Phase 4), only `disabled` and
+`unavailable` are reachable in practice — see §4.2's constraint on
+`GET /api/applications`.
 
 HomeBase health means the process and HTTP event loop can respond. Readiness
 means the registry is valid, HomeBase routes are mounted, and startup

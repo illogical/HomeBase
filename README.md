@@ -111,18 +111,21 @@ effective port is `HOMEBASE_PORT` when set, otherwise `server.port` from the
 selected registry (the example registry uses `17106`). Vite does not open a
 second user-facing port.
 
-Phase 2 uses static sample data only. These URLs preview its three fixture
-scenarios:
+The dashboard loads its application list from a small read-only HTTP API,
+backed by the same validated registry `ConfigService` loads at startup:
 
-```text
-http://localhost:<effective-port>/?fixture=mixed
-http://localhost:<effective-port>/?fixture=loading
-http://localhost:<effective-port>/?fixture=empty
-```
+- `GET /api/applications` — sanitized, presentation-only listing of every
+  configured application (no filesystem or adapter path is ever included).
+- `GET /health` — `200` once the process is accepting requests.
+- `GET /ready` — `200` once configuration has loaded successfully.
 
-Unknown `fixture` values use `mixed`. Application routes are shown for context
-but are deliberately not clickable, and the displayed statuses do not describe
-real processes.
+Application status is real configuration-derived data (`disabled` when a
+registry entry has `enabled: false`, `unavailable` when it has `enabled: true`
+but hosted-adapter loading isn't implemented yet) — it is not yet real process
+health, which is deferred to Phase 4. Application routes are shown for context
+but are deliberately not clickable. The dashboard performs a one-shot load on
+first render; a failed load shows a "Retry loading applications" button rather
+than polling automatically.
 
 To view the production build on the same configured listener:
 
@@ -131,10 +134,11 @@ npm run build
 npm start
 ```
 
-Phase 2 does not include Docker packaging. On Windows, install Node.js 24, use
+Phase 3 does not include Docker packaging. On Windows, install Node.js 24, use
 the same local configuration files, and run `npm ci`, `npm run typecheck`,
-`npm test`, `npm run build`, and `npm start` before reviewing the fixture URLs
-in a browser. Docker and Tailnet verification are deferred to Phase 6.
+`npm test`, `npm run build`, and `npm start` before reviewing the dashboard and
+`/api/applications`, `/health`, and `/ready` in a browser. Docker and Tailnet
+verification are deferred to Phase 6.
 
 The root `.env` and operational registry are intentionally ignored. The tracked
 `.env.example` and `config/homebase.example.json` are safe starting points.

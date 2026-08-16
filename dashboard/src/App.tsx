@@ -18,7 +18,7 @@ const stateLabels: Readonly<Record<ApplicationViewState, string>> = {
 
 export function App({ dataSource }: AppProps) {
   const mainRef = useRef<HTMLElement>(null);
-  const { applications, error } = useApplications(dataSource);
+  const { applications, error, retry } = useApplications(dataSource);
 
   const focusMain = (event: MouseEvent<HTMLAnchorElement>): void => {
     event.preventDefault();
@@ -45,7 +45,7 @@ export function App({ dataSource }: AppProps) {
         </div>
       </header>
       <main id="applications" ref={mainRef} tabIndex={-1}>
-        <ApplicationCollection applications={applications} error={error} />
+        <ApplicationCollection applications={applications} error={error} retry={retry} />
       </main>
     </>
   );
@@ -54,9 +54,10 @@ export function App({ dataSource }: AppProps) {
 interface ApplicationCollectionProps {
   readonly applications: readonly DashboardApplication[] | null;
   readonly error: boolean;
+  readonly retry: () => void;
 }
 
-function ApplicationCollection({ applications, error }: ApplicationCollectionProps) {
+function ApplicationCollection({ applications, error, retry }: ApplicationCollectionProps) {
   if (applications === null) {
     return <LoadingApplications />;
   }
@@ -71,6 +72,11 @@ function ApplicationCollection({ applications, error }: ApplicationCollectionPro
             ? "The prototype data source did not return an application list."
             : "This fixture intentionally shows how HomeBase looks before applications are listed."}
         </p>
+        {error ? (
+          <button type="button" onClick={retry}>
+            Retry loading applications
+          </button>
+        ) : null}
       </section>
     );
   }

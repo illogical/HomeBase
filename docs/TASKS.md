@@ -33,9 +33,9 @@ authorization to implement the item.
 
 ## Current priority
 
-Phases 1 and 2 are complete, so Phase 3 is the next priority. Phase 3 has an
-approved plan (see below); implement it in a separate, fresh session per this
-file's workflow.
+Phases 1 through 3 are complete, so Phase 4 is the next priority. Phase 4 has
+no approved plan yet; align on one before implementing it, per this file's
+workflow.
 
 ## Phase 1: Configuration foundation
 
@@ -85,16 +85,16 @@ file's workflow.
 
 ## Phase 3: Configuration and status integration
 
-**Status:** Not started  
+**Status:** Done  
 **Plan:** [Phase 3 configuration and status API](plans/2026-08-15-phase-3-configuration-status-api.md)
 
-- [ ] Define stable read-only application-listing and status response types.
-- [ ] Expose sanitized registry metadata without filesystem or adapter details.
-- [ ] Implement HomeBase liveness and readiness endpoints.
-- [ ] Replace frontend fixture data with API loading and honest error/reconnect states.
-- [ ] Ensure no HTTP endpoint can mutate configuration in v1.
+- [x] Define stable read-only application-listing and status response types.
+- [x] Expose sanitized registry metadata without filesystem or adapter details.
+- [x] Implement HomeBase liveness and readiness endpoints.
+- [x] Replace frontend fixture data with API loading and honest error/reconnect states.
+- [x] Ensure no HTTP endpoint can mutate configuration in v1.
 
-- [ ] **Acceptance gate:** API contract tests and frontend integration tests prove
+- [x] **Acceptance gate:** API contract tests and frontend integration tests prove
   that valid configuration renders correctly, private configuration is omitted,
   and loading, empty, and failure responses remain usable and accessible.
 

@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { createFixtureDataSource } from "./fixtures";
+import { HttpDashboardDataSource } from "./httpDataSource";
 import "./styles.css";
 
 const rootElement = document.getElementById("root");
@@ -12,6 +12,6 @@ if (rootElement === null) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <App dataSource={createFixtureDataSource(window.location.search)} />
+    <App dataSource={new HttpDashboardDataSource()} />
   </StrictMode>,
 );
