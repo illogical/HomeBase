@@ -75,6 +75,18 @@ hosted application receives an explicit application-scoped writable data path.
 No application may infer writable storage from the process working directory or
 write into another application's data directory.
 
+`HOMEBASE_DATA_PATH` is required and must be an absolute path, as seen by the
+Node process, identifying an existing directory: HomeBase's runtime-data root.
+`ConfigService` validates it exactly like `HOMEBASE_WORKSPACE_PATH` (absolute,
+resolved via `realpath`, must already exist as a directory). Beneath it:
+
+- `<HOMEBASE_DATA_PATH>/homebase/log/homebase.ndjson` is HomeBase's own
+  structured log (§7).
+- `<HOMEBASE_DATA_PATH>/apps/<applicationId>/` is one writable directory per
+  configured application, created by HomeBase with
+  `mkdir(..., { recursive: true })` before that application's adapter is
+  initialized — an adapter never infers or creates its own writable root.
+
 The first container implementation plan will choose the final mount locations,
 ownership, and read/write modes. It must preserve the workspace-relative path
 contract defined here.
@@ -228,7 +240,10 @@ normalizes `/example` to `/example/` with a redirect so relative browser URLs
 have one base. An application's API, assets, SPA fallback, redirects, forms,
 downloads, generated links, client-side routes, cookies, WebSockets, and
 Socket.IO paths must remain beneath that base path. Its SPA fallback must never
-consume HomeBase or another application's routes.
+consume HomeBase or another application's routes. For example, LMApi's own
+API surface is reachable at paths such as `/lmapi/...`; HomeBase's `/api`
+prefix is reserved exclusively for HomeBase's own read-only API
+(`/api/applications`) and is never a per-app namespace.
 
 Disabled applications are not imported or mounted. Their cards remain visible
 as disabled. Enabled applications that fail to load remain visible as
@@ -245,16 +260,17 @@ V1 reserves these HomeBase-owned API capabilities:
 - `GET /health` and `GET /ready` — health and readiness endpoints for
   container and Tailnet verification.
 
-Public responses must not expose repository paths, adapter paths, environment
-variables, stack traces, dependency credentials, or raw configuration. V1
-provides no create, update, delete, reload, Git, build, or restart endpoint.
+Public responses must not expose repository paths, adapter paths, writable data
+paths, environment variables, stack traces, dependency credentials, or raw
+configuration. V1 provides no create, update, delete, reload, Git, build, or
+restart endpoint.
 
-Until HomeBase imports hosted adapters (Phase 4), `GET /api/applications` can
-only truthfully report two of the states in §6: `disabled` (the registry entry
-has `enabled: false`) and `unavailable` (the registry entry has
-`enabled: true`, but hosted-adapter loading is not implemented yet). It must
-not fabricate `ready`, `degraded`, `initializing`, or `stopping` from
-`enabled: true` configuration alone.
+`GET /api/applications` reports the full seven-state lifecycle from §6, sourced
+live from `ApplicationHost.statusFor(id)` for every configured application (no
+caching, no polling). `disabled` and `unavailable` derive directly from
+configuration and load outcome; `ready`/`degraded` are read live from each
+loaded adapter's `getStatus()`, bounded to 2000 ms per call so the endpoint
+stays bounded even with several applications.
 
 ### 4.3 Shared browser origin
 
@@ -267,30 +283,76 @@ depend on them.
 
 ## 5. Hosted application contract
 
-The shared TypeScript contract will be versioned independently of any one
-application. Its v1 behavior is equivalent to:
+The shared TypeScript contract is versioned independently of any one
+application and implemented at `src/contracts/hostedApplication.ts`
+(`HOSTED_CONTRACT_VERSION = 1`):
 
 ```ts
-interface HostedApplication {
-  contractVersion: 1;
+export type ApplicationLifecycleState =
+  | "disabled" | "loading" | "initializing"
+  | "ready" | "degraded" | "unavailable" | "stopping";
+
+export interface HostedApplicationStatus {
+  readonly state: "ready" | "degraded";
+  readonly summary: string;
+  readonly since: string; // ISO-8601
+}
+
+export interface ActiveWorkStatus {
+  readonly hasActiveWork: boolean;
+  readonly description?: string;
+}
+
+export type Disposer = () => Promise<void> | void;
+
+export interface HostedApplicationOptions {
+  readonly applicationId: string;
+  readonly repositoryRoot: string;
+  readonly basePath: `/${string}/`;
+  readonly hostOrigin: string | undefined;
+  readonly dataPath: string;
+  readonly config: Readonly<Record<string, unknown>> | undefined;
+  readonly logger: ApplicationLogger;
+}
+
+export interface HostedApplication {
+  readonly contractVersion: 1;
   initialize?(): Promise<void>;
-  router?: Express.Router;
-  staticAssets?: {
-    directory: string;
-    spaFallback: boolean;
-  };
-  attachRealtime?(server: http.Server): Promise<Disposer | void>;
+  router?: import("express").Router;
+  staticAssets?: { readonly directory: string; readonly spaFallback: boolean };
+  attachRealtime?(server: import("node:http").Server): Promise<Disposer | void>;
   getStatus(): Promise<HostedApplicationStatus>;
   getActiveWork?(): Promise<ActiveWorkStatus>;
   dispose?(): Promise<void>;
 }
+
+export type CreateHostedApplication =
+  (options: HostedApplicationOptions) => HostedApplication;
 ```
 
-The eventual interface will also define explicit creation options containing the
-application ID, repository root, web/API/realtime base paths, host origin,
-application-scoped writable data path, application-specific configuration, and
-scoped logger. Concrete TypeScript types and lifecycle timeouts will be fixed in
-the hosted-architecture implementation plan without weakening these guarantees.
+A compiled adapter's ES module default export must be a
+`CreateHostedApplication` factory function, not a pre-built object: evaluating
+the module performs only module-level declarations, the factory call
+constructs the object from injected options and must still perform no I/O, and
+all real resource acquisition happens inside `initialize()`. `basePath` is
+always the reserved `/${slug}/` form computed by `ConfigService`; adapters must
+not hardcode their own slug. `hostOrigin` (sourced from the optional
+`HOMEBASE_PUBLIC_ORIGIN` environment variable) is informational only — v1 does
+not require adapters to depend on an absolute origin. `config` is the
+application's optional, opaque `adapterConfig` registry field, passed through
+uninterpreted.
+
+`ApplicationHost` (`src/services/ApplicationHost.ts`) enforces these exact
+lifecycle timeouts: dynamic import plus the factory call, combined, 5000 ms;
+`initialize()`, 10000 ms; `attachRealtime()`, 5000 ms (a failure here does not
+flip the application back to `unavailable` — realtime is a supplementary
+capability); live `getStatus()` reads from the applications API, 2000 ms each;
+`getActiveWork()` during shutdown, 2000 ms each application plus one shared
+5000 ms grace window if any report active work; combined realtime-disposer-and-
+`dispose()` budget per application during shutdown, 5000 ms, applied in reverse
+registry order so one hung or failing adapter cannot block or fail its
+siblings' disposal; and an overall 20000 ms shutdown watchdog that force-exits
+the process if disposal has not completed by then.
 
 Importing an adapter must not:
 
@@ -327,9 +389,12 @@ logs. A missing, incompatible, or failed optional adapter does not falsify the
 status of healthy applications and does not prevent the HomeBase dashboard from
 starting.
 
-Before hosted-adapter loading exists (Phase 4), only `disabled` and
-`unavailable` are reachable in practice — see §4.2's constraint on
-`GET /api/applications`.
+All seven states are reachable: `ApplicationHost` loads enabled applications in
+stable registry order, one at a time, transitioning each through
+`loading` → `initializing` → (loaded, reporting live `ready`/`degraded` from
+`getStatus()`) or `unavailable` on any failure. After shutdown begins, every
+loaded application reports `stopping` regardless of what `getStatus()` would
+say.
 
 HomeBase health means the process and HTTP event loop can respond. Readiness
 means the registry is valid, HomeBase routes are mounted, and startup
@@ -339,8 +404,9 @@ application to be ready; per-application states carry that information.
 HomeBase initializes enabled applications in stable registry order. Shutdown
 stops accepting new traffic, marks applications as stopping, checks reported
 active work, disposes initialized adapters in reverse order, closes the shared
-server, and exits within a documented bound. Exact drain policy and timeouts must
-be selected in the hosted-lifecycle plan before production rollout.
+server, and exits within the documented bound in §5. v1 does not implement
+unbounded draining: a shared 5000 ms grace window is honored once, then
+shutdown proceeds regardless.
 
 Unexpected process-level errors are logged with application context where it can
 be determined. Startup isolation cannot make arbitrary trusted code safe after a
@@ -354,6 +420,38 @@ application ID when applicable, event name, and sanitized context. Secrets and
 raw environment values must not be logged. Startup, status transitions,
 initialization failures, realtime attachment, disposal, health, and shutdown
 timing must be observable.
+
+HomeBase owns one append-only NDJSON sink
+(`<HOMEBASE_DATA_PATH>/homebase/log/homebase.ndjson`, §2.3), written through
+one `RootLogger` constructed once in `startServer.ts` before any application
+loads and bound to `serviceName: "homebase"` plus a random
+`serviceInstanceId`. `RootLogger.child({ applicationId })` returns a bound
+child logger passed into each adapter's `HostedApplicationOptions.logger`; a
+child cannot rebind `applicationId` or `serviceName`. Records carry
+`timestamp`, `severityText`, `body`, `eventName`, `serviceName`,
+`serviceInstanceId`, `applicationId`, `component`, `requestId`, `attributes`,
+and `error`; `traceId`/`spanId` stay absent until a later OpenTelemetry-export
+phase. The default minimum level is `info`; `HOMEBASE_LOG_LEVEL` overrides it.
+Outside `NODE_ENV=production`, `info` and above are also mirrored to the
+console.
+
+The sink is bounded: 50 MiB active-file rotation, UTC-midnight time-based
+rotation, the 7 most recent rotated files retained, and the oldest rotated
+file deleted first if total log disk usage would exceed a 500 MiB soft budget.
+A write failure (disk full, permission error, rotation failure) never throws
+into caller code: the sink falls back to one structured `stderr` line per
+dropped record and marks an internal, non-public `loggingDegraded` flag that
+never changes `GET /health` or `GET /ready`. A bounded `flush(2000)` runs once
+during shutdown, after all adapters have been disposed, so their final
+lifecycle records are not lost.
+
+`attributes` and `error` are redacted before serialization: `authorization`,
+`cookie`, and `set-cookie` headers and any key containing `token`, `secret`,
+`password`, or `apikey` (case-insensitive) are redacted; string values over
+2 KiB are truncated; arrays and objects are capped at 50 entries. An
+`AsyncLocalStorage`-backed request context, populated by request-ID middleware
+mounted first in `src/app.ts`, lets `RootLogger` attach `requestId`
+automatically.
 
 V1 status is runtime truth, not a claim about Git checkout, build, or loaded
 revision. Checked-out, built, and loaded revision tracking belongs to a later

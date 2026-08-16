@@ -10,6 +10,7 @@ export interface ConfigFixture {
   readonly root: string;
   readonly projectRoot: string;
   readonly workspaceRoot: string;
+  readonly dataRoot: string;
   readonly configFile: string;
   readonly schemaFile: string;
   writeRegistry(registry: unknown): Promise<void>;
@@ -53,17 +54,20 @@ export async function createConfigFixture(): Promise<ConfigFixture> {
   const root = await mkdtemp(path.join(os.tmpdir(), "homebase-config-"));
   const projectRoot = path.join(root, "HomeBase");
   const workspaceRoot = path.join(root, "workspace");
+  const dataRoot = path.join(root, "data");
   const configDirectory = path.join(projectRoot, "config");
   const configFile = path.join(configDirectory, "homebase.json");
   const schemaFile = path.join(configDirectory, "homebase.schema.json");
   await mkdir(configDirectory, { recursive: true });
   await mkdir(workspaceRoot, { recursive: true });
+  await mkdir(dataRoot, { recursive: true });
   await cp(path.join(repositoryRoot, "config/homebase.schema.json"), schemaFile);
 
   return {
     root,
     projectRoot,
     workspaceRoot,
+    dataRoot,
     configFile,
     schemaFile,
     writeRegistry: async (registry) => {

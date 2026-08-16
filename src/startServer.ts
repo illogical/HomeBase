@@ -7,6 +7,9 @@ import {
   type DashboardMode,
   type InitializeDashboardOptions,
 } from "./dashboardHost.js";
+import type { ApplicationLogger } from "./contracts/hostedApplication.js";
+import { RootLogger } from "./logging/RootLogger.js";
+import { ApplicationHost } from "./services/ApplicationHost.js";
 import { ConfigService, type ConfigServiceLoadOptions } from "./services/ConfigService.js";
 
 export interface StartServerOptions {
@@ -14,6 +17,11 @@ export interface StartServerOptions {
   readonly loadConfiguration?: (
     options?: ConfigServiceLoadOptions,
   ) => Promise<ConfigService>;
+  readonly createRootLogger?: (configService: ConfigService) => ApplicationLogger;
+  readonly loadApplicationHost?: (
+    configService: ConfigService,
+    rootLogger: ApplicationLogger,
+  ) => Promise<ApplicationHost>;
   readonly mode?: DashboardMode;
   readonly createServer?: (app: Express) => Server;
   readonly initializeDashboard?: (
@@ -29,21 +37,49 @@ export interface StartedHomeBase {
   readonly app: Express;
   readonly configService: ConfigService;
   readonly server: Server;
+  readonly applicationHost: ApplicationHost;
+  close(): Promise<void>;
 }
 
 export async function startServer(options: StartServerOptions = {}): Promise<StartedHomeBase> {
   const loadConfiguration = options.loadConfiguration ?? ConfigService.load;
   const configService = await loadConfiguration(options.config);
-  const app = createApp(configService);
+  const createRootLogger =
+    options.createRootLogger ?? ((service: ConfigService) => RootLogger.create({ dataRoot: service.dataRoot }));
+  const rootLogger = createRootLogger(configService);
+  const loadApplicationHost = options.loadApplicationHost ?? ApplicationHost.loadAll;
+  const applicationHost = await loadApplicationHost(configService, rootLogger);
+
+  const app = createApp(configService, applicationHost);
   const server = (options.createServer ?? createHttpServer)(app);
+  await applicationHost.attachRealtime(server);
+
   const mode = options.mode ?? "production";
   const prepareDashboard = options.initializeDashboard ?? initializeDashboard;
-  const dashboard = await prepareDashboard(app, server, { ...options.dashboard, mode });
+  let dashboard: DashboardController;
+  try {
+    dashboard = await prepareDashboard(app, server, { ...options.dashboard, mode });
+  } catch (error) {
+    await applicationHost.shutdown();
+    throw error;
+  }
+
   const listen = options.listen ?? listenWithExpress;
+  let closePromise: Promise<void> | undefined;
+  const close = async (): Promise<void> => {
+    if (closePromise) return closePromise;
+    closePromise = (async () => {
+      await applicationHost.shutdown();
+      await dashboard.close();
+    })();
+    return closePromise;
+  };
+
   try {
     await listen(server, configService.server.port);
-    return { app, configService, server };
+    return { app, configService, server, applicationHost, close };
   } catch (error) {
+    await applicationHost.shutdown();
     await dashboard.close();
     throw error;
   }

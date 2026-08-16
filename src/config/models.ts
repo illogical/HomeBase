@@ -11,6 +11,7 @@ export interface ConfigurationPaths {
   readonly projectRoot: string;
   readonly configFile: string;
   readonly workspaceRoot: string;
+  readonly dataRoot: string;
 }
 
 export interface ApplicationConfiguration {
@@ -18,7 +19,7 @@ export interface ApplicationConfiguration {
   readonly displayName: string;
   readonly description: string;
   readonly slug: string;
-  readonly basePath: string;
+  readonly basePath: `/${string}/`;
   readonly enabled: boolean;
   readonly repoPath: string;
   readonly repositoryRoot: string;
@@ -32,6 +33,8 @@ export interface ApplicationConfiguration {
   readonly icon: string | undefined;
   readonly category: string | undefined;
   readonly sortOrder: number | undefined;
+  readonly dataPath: string;
+  readonly adapterConfig: Readonly<Record<string, unknown>> | undefined;
 }
 
 export interface HomeBaseConfiguration {
@@ -41,6 +44,7 @@ export interface HomeBaseConfiguration {
   readonly server: ServerConfiguration;
   readonly paths: ConfigurationPaths;
   readonly applications: readonly ApplicationConfiguration[];
+  readonly hostOrigin: string | undefined;
 }
 
 export interface RegistryApplication {
@@ -59,6 +63,7 @@ export interface RegistryApplication {
   icon?: string;
   category?: string;
   sortOrder?: number;
+  adapterConfig?: Record<string, unknown>;
 }
 
 export interface RegistryDocument {

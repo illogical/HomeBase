@@ -31,6 +31,7 @@ async function load(
   current: ConfigFixture,
   environment: Readonly<Record<string, string | undefined>> = {
     HOMEBASE_WORKSPACE_PATH: current.workspaceRoot,
+    HOMEBASE_DATA_PATH: current.dataRoot,
   },
   nodeVersion = "24.0.0",
 ): Promise<ConfigService> {
@@ -97,6 +98,7 @@ describe("ConfigService", () => {
 
     const service = await load(current, {
       HOMEBASE_WORKSPACE_PATH: current.workspaceRoot,
+      HOMEBASE_DATA_PATH: current.dataRoot,
       HOMEBASE_PORT: "19000",
     });
 
@@ -113,6 +115,7 @@ describe("ConfigService", () => {
 
     const service = await load(current, {
       HOMEBASE_WORKSPACE_PATH: current.workspaceRoot,
+      HOMEBASE_DATA_PATH: current.dataRoot,
       HOMEBASE_CONFIG_PATH: "settings/local.json",
     });
 
@@ -126,6 +129,7 @@ describe("ConfigService", () => {
     await expectIssue(
       load(current, {
         HOMEBASE_WORKSPACE_PATH: current.workspaceRoot,
+        HOMEBASE_DATA_PATH: current.dataRoot,
         HOMEBASE_CONFIG_PATH: "   ",
       }),
       "ENVIRONMENT_VALUE_INVALID",
@@ -155,6 +159,7 @@ describe("ConfigService", () => {
       await expectIssue(
         load(current, {
           HOMEBASE_WORKSPACE_PATH: current.workspaceRoot,
+          HOMEBASE_DATA_PATH: current.dataRoot,
           HOMEBASE_PORT: port,
         }),
         "ENVIRONMENT_VALUE_INVALID",
@@ -166,16 +171,90 @@ describe("ConfigService", () => {
   it("requires an absolute existing workspace directory", async () => {
     const current = await fixture();
     await current.writeRegistry(validRegistry());
-    await expectIssue(load(current, {}), "ENVIRONMENT_VALUE_REQUIRED");
     await expectIssue(
-      load(current, { HOMEBASE_WORKSPACE_PATH: "relative" }),
+      load(current, { HOMEBASE_DATA_PATH: current.dataRoot }),
+      "ENVIRONMENT_VALUE_REQUIRED",
+      "HOMEBASE_WORKSPACE_PATH",
+    );
+    await expectIssue(
+      load(current, {
+        HOMEBASE_WORKSPACE_PATH: "relative",
+        HOMEBASE_DATA_PATH: current.dataRoot,
+      }),
       "ENVIRONMENT_VALUE_INVALID",
+      "HOMEBASE_WORKSPACE_PATH",
     );
     const filePath = path.join(current.root, "not-a-directory");
     await writeFile(filePath, "file", "utf8");
     await expectIssue(
-      load(current, { HOMEBASE_WORKSPACE_PATH: filePath }),
+      load(current, {
+        HOMEBASE_WORKSPACE_PATH: filePath,
+        HOMEBASE_DATA_PATH: current.dataRoot,
+      }),
       "ENVIRONMENT_VALUE_INVALID",
+      "HOMEBASE_WORKSPACE_PATH",
+    );
+  });
+
+  it("requires an absolute existing data directory", async () => {
+    const current = await fixture();
+    await current.writeRegistry(validRegistry());
+    await expectIssue(
+      load(current, { HOMEBASE_WORKSPACE_PATH: current.workspaceRoot }),
+      "ENVIRONMENT_VALUE_REQUIRED",
+      "HOMEBASE_DATA_PATH",
+    );
+    await expectIssue(
+      load(current, {
+        HOMEBASE_WORKSPACE_PATH: current.workspaceRoot,
+        HOMEBASE_DATA_PATH: "relative",
+      }),
+      "ENVIRONMENT_VALUE_INVALID",
+      "HOMEBASE_DATA_PATH",
+    );
+    const filePath = path.join(current.root, "not-a-directory-data");
+    await writeFile(filePath, "file", "utf8");
+    await expectIssue(
+      load(current, {
+        HOMEBASE_WORKSPACE_PATH: current.workspaceRoot,
+        HOMEBASE_DATA_PATH: filePath,
+      }),
+      "ENVIRONMENT_VALUE_INVALID",
+      "HOMEBASE_DATA_PATH",
+    );
+  });
+
+  it.each(["", "   "])("rejects an empty HOMEBASE_PUBLIC_ORIGIN value %j", async (value) => {
+    const current = await fixture();
+    await current.writeRegistry(validRegistry());
+    await expectIssue(
+      load(current, {
+        HOMEBASE_WORKSPACE_PATH: current.workspaceRoot,
+        HOMEBASE_DATA_PATH: current.dataRoot,
+        HOMEBASE_PUBLIC_ORIGIN: value,
+      }),
+      "ENVIRONMENT_VALUE_INVALID",
+      "HOMEBASE_PUBLIC_ORIGIN",
+    );
+  });
+
+  it("threads an optional HOMEBASE_PUBLIC_ORIGIN through as hostOrigin", async () => {
+    const current = await fixture();
+    await current.writeRegistry(validRegistry());
+    const service = await load(current, {
+      HOMEBASE_WORKSPACE_PATH: current.workspaceRoot,
+      HOMEBASE_DATA_PATH: current.dataRoot,
+      HOMEBASE_PUBLIC_ORIGIN: "https://homebase.example",
+    });
+    expect(service.hostOrigin).toBe("https://homebase.example");
+  });
+
+  it("computes a per-application data path beneath the data root", async () => {
+    const current = await fixture();
+    await current.writeRegistry(validRegistry());
+    const service = await load(current);
+    expect(service.applications[0]?.dataPath).toBe(
+      path.join(current.dataRoot, "apps", "first-app"),
     );
   });
 
@@ -206,6 +285,7 @@ describe("ConfigService", () => {
     await expectIssue(
       load(current, {
         HOMEBASE_WORKSPACE_PATH: current.workspaceRoot,
+        HOMEBASE_DATA_PATH: current.dataRoot,
         HOMEBASE_CONFIG_PATH: registryDirectory,
       }),
       "CONFIG_FILE_READ_FAILED",

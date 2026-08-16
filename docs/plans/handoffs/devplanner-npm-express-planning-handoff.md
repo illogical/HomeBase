@@ -20,7 +20,10 @@ product and architecture decisions have been resolved and the user approves it.
 
 1. Read DevPlanner's repository-wide and directory-specific agent instructions.
 2. Read its README, specification, task index, architecture records, and existing
-   migration plans, if present.
+   migration plans, if present. If the HomeBase repository is not checked out
+   alongside DevPlanner in this environment, use the "HomeBase references"
+   section below to pull HomeBase's README and specification from GitHub
+   instead of skipping them.
 3. Inspect the current worktree and preserve unrelated changes.
 4. Establish the current baseline from source, manifests, lockfiles, scripts,
    build configuration, tests, and generated output. Do not rely on the historical
@@ -44,10 +47,15 @@ This is composition, not a monorepo migration. DevPlanner retains its own
 HomeBase must not install DevPlanner dependencies at runtime or start DevPlanner
 as a hidden HTTP child process.
 
-HomeBase is currently documentation-only. Its exact shared TypeScript package,
-concrete adapter types, lifecycle timeouts, and final registry artifacts have not
-yet been implemented. The DevPlanner plan should identify any sequencing or
-contract dependency instead of inventing those details locally.
+HomeBase's hosted adapter contract and runtime (Phase 4) are under active
+implementation but are not yet committed or approved. The exact shared
+TypeScript package, concrete adapter types, lifecycle timeouts, and final
+registry artifacts should be treated as provisional: do not assume they are
+either finished or nonexistent. Verify the current shape directly from
+HomeBase's source and open plans/PRs when both repositories are available, and
+otherwise from the GitHub references below. The DevPlanner plan should
+identify any sequencing or contract dependency instead of inventing those
+details locally.
 
 ## Approved compatibility requirements
 
@@ -309,13 +317,31 @@ At minimum, plan verification for:
 
 ## HomeBase references
 
-When both repositories are available, use these HomeBase documents in precedence
-order after the user's current instructions and DevPlanner's local agent guidance:
+Use these HomeBase documents in precedence order after the user's current
+instructions and DevPlanner's local agent guidance:
 
 1. `README.md`
 2. `docs/SPECIFICATION.md`
 3. `docs/TASKS.md`, especially Phase 5
 4. `docs/BACKGROUND.md` only for historical leads that are revalidated
+
+When the HomeBase repository is checked out alongside DevPlanner in this
+environment, read these files locally — the local checkout may contain
+in-progress, uncommitted Phase 4 work that is more current than what is
+published on GitHub. When it is not available, fetch the same documents from
+the public HomeBase repository instead of skipping them:
+
+- Repository: https://github.com/illogical/HomeBase
+- README: https://github.com/illogical/HomeBase/blob/main/README.md
+- Specification: https://github.com/illogical/HomeBase/blob/main/docs/SPECIFICATION.md
+- Task index: https://github.com/illogical/HomeBase/blob/main/docs/TASKS.md
+- Background: https://github.com/illogical/HomeBase/blob/main/docs/BACKGROUND.md
+
+The GitHub copy reflects the last commit to `main` and can lag local,
+in-progress HomeBase work (for example, uncommitted Phase 4 contract changes).
+Treat it as authoritative only when a local HomeBase checkout isn't available,
+and note in the plan if a material decision depends on unpublished HomeBase
+work that could not be verified this way.
 
 The HomeBase specification is the approved v1 intent. The background document
 is not an implementation commitment and must not override current DevPlanner

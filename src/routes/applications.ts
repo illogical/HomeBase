@@ -1,8 +1,10 @@
 import { Router } from "express";
+import type { ApplicationLifecycleState } from "../contracts/hostedApplication.js";
 import type { ApplicationConfiguration } from "../config/models.js";
+import type { ApplicationHost } from "../services/ApplicationHost.js";
 import type { ConfigService } from "../services/ConfigService.js";
 
-export type ApplicationListingState = "disabled" | "unavailable";
+export type ApplicationListingState = ApplicationLifecycleState;
 
 export interface ApplicationListingEntry {
   readonly id: string;
@@ -13,13 +15,17 @@ export interface ApplicationListingEntry {
   readonly statusSummary: string;
 }
 
-export function createApplicationsRouter(configService: ConfigService): Router {
+export function createApplicationsRouter(
+  configService: ConfigService,
+  applicationHost: ApplicationHost,
+): Router {
   const router = Router();
 
-  router.get("/applications", (_request, response) => {
-    const entries = [...configService.applications]
-      .sort(compareApplications)
-      .map(toListingEntry);
+  router.get("/applications", async (_request, response) => {
+    const applications = [...configService.applications].sort(compareApplications);
+    const entries = await Promise.all(
+      applications.map((application) => toListingEntry(application, applicationHost)),
+    );
 
     response.type("application/json");
     response.setHeader("Cache-Control", "no-store");
@@ -41,15 +47,17 @@ function compareApplications(
   return left.displayName.localeCompare(right.displayName);
 }
 
-function toListingEntry(application: ApplicationConfiguration): ApplicationListingEntry {
+async function toListingEntry(
+  application: ApplicationConfiguration,
+  applicationHost: ApplicationHost,
+): Promise<ApplicationListingEntry> {
+  const { state, summary } = await applicationHost.statusFor(application.id);
   return {
     id: application.id,
     displayName: application.displayName,
     description: application.description,
     basePath: application.basePath,
-    state: application.enabled ? "unavailable" : "disabled",
-    statusSummary: application.enabled
-      ? "Hosted adapter loading is not implemented yet."
-      : "This application is disabled in the HomeBase configuration.",
+    state,
+    statusSummary: summary,
   };
 }

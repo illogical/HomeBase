@@ -6,11 +6,13 @@ Tailnet address, with concise top-level routes such as `/devplanner`, `/lmapi`,
 `/memoryapi`, and `/lmeval`.
 
 > [!IMPORTANT]
-> The Phase 1 configuration runtime and the Phase 2 static dashboard prototype
-> are both complete, verified with automated checks and a scripted headless-
-> browser matrix across phone, iPad mini (portrait and landscape), and desktop
-> viewports. Live dashboard data, hosted adapters, public APIs, Docker
-> packaging, and Tailnet rollout remain planned work unless stated otherwise.
+> Phases 1 through 4 are complete: the configuration runtime, the static
+> dashboard prototype, live `GET /api/applications` data backed by
+> `ConfigService`, and the hosted-application architecture proof (import-safe
+> adapter loading, mounting, realtime attachment, structured logging, and
+> bounded shutdown) are all implemented and verified with automated checks.
+> Real sibling-repository migration (Phase 5), Docker packaging, and Tailnet
+> rollout (Phase 6) remain planned work unless stated otherwise.
 
 ## Project goals
 
@@ -39,8 +41,9 @@ TypeScript source trees. A hosted adapter is expected to provide the capabilitie
 needed to initialize the application, mount its routes and static assets, attach
 realtime behavior to the shared server, report status, and release its resources.
 The v1 adapter capabilities and lifecycle guarantees are defined in the
-[specification](docs/SPECIFICATION.md); exact TypeScript types will be fixed in
-the hosted-architecture implementation plan.
+[specification](docs/SPECIFICATION.md) and implemented as the versioned
+`HostedApplication`/`CreateHostedApplication` contract in
+`src/contracts/hostedApplication.ts`.
 
 All hosted applications are trusted code. Although their repositories and npm
 dependencies remain separate, hosted adapters share HomeBase's process, memory,
@@ -90,12 +93,24 @@ cp config/homebase.example.json config/homebase.json
 ```
 
 Edit `.env` so `HOMEBASE_WORKSPACE_PATH` is the absolute directory containing
-the registered application repositories. On this development machine, for
-example:
+the registered application repositories, and `HOMEBASE_DATA_PATH` is an
+absolute, existing, writable directory HomeBase uses for its own log file and
+one writable subdirectory per configured application. On this development
+machine, for example:
 
 ```dotenv
 HOMEBASE_WORKSPACE_PATH=/Users/matt/dev/projects
+HOMEBASE_DATA_PATH=/Users/matt/dev/homebase-data
 ```
+
+HomeBase writes its own structured NDJSON log to
+`<HOMEBASE_DATA_PATH>/homebase/log/homebase.ndjson` (rotated at UTC midnight
+or at 50 MiB, whichever comes first, retaining the 7 most recent rotated
+files under a 500 MiB total budget) and creates
+`<HOMEBASE_DATA_PATH>/apps/<applicationId>/` for every configured application
+before its adapter is initialized. `HOMEBASE_LOG_LEVEL` (default `info`) and
+the optional, informational `HOMEBASE_PUBLIC_ORIGIN` are documented in
+`.env.example`.
 
 Then edit the ignored `config/homebase.json` and run:
 
@@ -119,13 +134,28 @@ backed by the same validated registry `ConfigService` loads at startup:
 - `GET /health` — `200` once the process is accepting requests.
 - `GET /ready` — `200` once configuration has loaded successfully.
 
-Application status is real configuration-derived data (`disabled` when a
-registry entry has `enabled: false`, `unavailable` when it has `enabled: true`
-but hosted-adapter loading isn't implemented yet) — it is not yet real process
-health, which is deferred to Phase 4. Application routes are shown for context
-but are deliberately not clickable. The dashboard performs a one-shot load on
-first render; a failed load shows a "Retry loading applications" button rather
-than polling automatically.
+Application status reflects the real hosted-application lifecycle state
+machine (`disabled`, `loading`, `initializing`, `ready`, `degraded`,
+`unavailable`, `stopping`) reported live by `ApplicationHost`, per
+`docs/SPECIFICATION.md` §6. The dashboard performs a one-shot load on first
+render; a failed load shows a "Retry loading applications" button rather than
+polling automatically.
+
+### Exercising hosted adapters locally
+
+`test/fixtures/adapters/` contains nine self-contained fixture adapters
+(`routes`, `static-assets`, `spa-fallback`, `websocket`, `socket-io`,
+`degraded`, `failing`, `active-work`, `cleanup`) that satisfy the
+`CreateHostedApplication` contract in `src/contracts/hostedApplication.ts`
+without touching a real sibling repository. To try one against a real running
+HomeBase process, point a scratch registry entry's `repoPath` at
+`test/fixtures/adapters/<name>` (relative to `HOMEBASE_WORKSPACE_PATH`) and
+`adapterPath` at `index.ts`, set `enabled: true`, then run `npm run build`
+(or `npm run dev`) and `npm start`. `GET /api/applications` reports the
+adapter's real state, its `basePath` serves its mounted routes/static
+assets/SPA fallback, and `Ctrl+C` exercises the bounded, reverse-order
+shutdown sequence described in the
+[Phase 4 hosted architecture proof](docs/plans/2026-08-15-phase-4-hosted-architecture-proof.md).
 
 To view the production build on the same configured listener:
 

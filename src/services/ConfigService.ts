@@ -39,6 +39,7 @@ interface ConfigurationSources {
   readonly port: "default" | "registry" | "environment";
   readonly configFile: "default" | "environment";
   readonly workspaceRoot: "environment";
+  readonly dataRoot: "environment";
 }
 
 interface ExistingAncestor {
@@ -92,12 +93,19 @@ export class ConfigService {
       : path.join(projectRoot, DEFAULT_CONFIG_RELATIVE_PATH);
     const registry = await readAndValidateRegistry(configFile, schemaPath);
     const effectivePort = resolvePort(registry.server.port, environment.HOMEBASE_PORT);
-    const workspaceRoot = await resolveWorkspaceRoot(
+    const workspaceRoot = await resolveExistingDirectory(
       environment.HOMEBASE_WORKSPACE_PATH,
+      "HOMEBASE_WORKSPACE_PATH",
     );
+    const dataRoot = await resolveExistingDirectory(
+      environment.HOMEBASE_DATA_PATH,
+      "HOMEBASE_DATA_PATH",
+    );
+    const hostOrigin = resolveHostOrigin(environment.HOMEBASE_PUBLIC_ORIGIN);
     const applications = await normalizeApplications(
       registry.applications,
       workspaceRoot,
+      dataRoot,
     );
 
     const configuration: HomeBaseConfiguration = {
@@ -109,13 +117,16 @@ export class ConfigService {
         projectRoot,
         configFile,
         workspaceRoot,
+        dataRoot,
       },
       applications,
+      hostOrigin,
     };
     const sources: ConfigurationSources = {
       port: environment.HOMEBASE_PORT === undefined ? "registry" : "environment",
       configFile: configOverride === undefined ? "default" : "environment",
       workspaceRoot: "environment",
+      dataRoot: "environment",
     };
 
     return new ConfigService(configuration, sources);
@@ -139,6 +150,14 @@ export class ConfigService {
 
   get workspaceRoot(): string {
     return this.#configuration.paths.workspaceRoot;
+  }
+
+  get dataRoot(): string {
+    return this.#configuration.paths.dataRoot;
+  }
+
+  get hostOrigin(): string | undefined {
+    return this.#configuration.hostOrigin;
   }
 
   get applications(): readonly ApplicationConfiguration[] {
@@ -169,13 +188,16 @@ function validateNodeVersion(nodeVersion: string): void {
   }
 }
 
-async function resolveWorkspaceRoot(value: string | undefined): Promise<string> {
+async function resolveExistingDirectory(
+  value: string | undefined,
+  environmentName: "HOMEBASE_WORKSPACE_PATH" | "HOMEBASE_DATA_PATH",
+): Promise<string> {
   if (value === undefined || value.length === 0) {
     throw new ConfigurationError([
       {
         code: "ENVIRONMENT_VALUE_REQUIRED",
-        path: "HOMEBASE_WORKSPACE_PATH",
-        message: "Set an absolute workspace directory path.",
+        path: environmentName,
+        message: "Set an absolute directory path.",
       },
     ]);
   }
@@ -183,8 +205,8 @@ async function resolveWorkspaceRoot(value: string | undefined): Promise<string> 
     throw new ConfigurationError([
       {
         code: "ENVIRONMENT_VALUE_INVALID",
-        path: "HOMEBASE_WORKSPACE_PATH",
-        message: "The workspace path must be absolute.",
+        path: environmentName,
+        message: "The path must be absolute.",
       },
     ]);
   }
@@ -199,11 +221,25 @@ async function resolveWorkspaceRoot(value: string | undefined): Promise<string> 
     throw new ConfigurationError([
       {
         code: "ENVIRONMENT_VALUE_INVALID",
-        path: "HOMEBASE_WORKSPACE_PATH",
-        message: "The workspace path must identify an existing directory.",
+        path: environmentName,
+        message: "The path must identify an existing directory.",
       },
     ]);
   }
+}
+
+function resolveHostOrigin(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  if (value.trim().length === 0) {
+    throw new ConfigurationError([
+      {
+        code: "ENVIRONMENT_VALUE_INVALID",
+        path: "HOMEBASE_PUBLIC_ORIGIN",
+        message: "Use a non-empty origin string.",
+      },
+    ]);
+  }
+  return value;
 }
 
 async function readAndValidateRegistry(
@@ -396,6 +432,7 @@ function invalidPortError(): ConfigurationError {
 async function normalizeApplications(
   applications: readonly RegistryApplication[],
   workspaceRoot: string,
+  dataRoot: string,
 ): Promise<readonly ApplicationConfiguration[]> {
   const normalized: ApplicationConfiguration[] = [];
   for (const [index, application] of applications.entries()) {
@@ -446,6 +483,8 @@ async function normalizeApplications(
       icon: application.icon,
       category: application.category,
       sortOrder: application.sortOrder,
+      dataPath: path.join(dataRoot, "apps", application.id),
+      adapterConfig: application.adapterConfig,
     });
   }
   return normalized;

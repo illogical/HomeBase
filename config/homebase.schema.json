@@ -126,6 +126,10 @@
         },
         "sortOrder": {
           "type": "integer"
+        },
+        "adapterConfig": {
+          "type": "object",
+          "description": "Opaque, per-application configuration passed through to the hosted adapter. HomeBase does not interpret it."
         }
       }
     }

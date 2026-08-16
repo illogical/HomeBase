@@ -33,9 +33,9 @@ authorization to implement the item.
 
 ## Current priority
 
-Phases 1 through 3 are complete, so Phase 4 is the next priority. Phase 4 has
-no approved plan yet; align on one before implementing it, per this file's
-workflow.
+Phases 1 through 4 are complete. Phase 5 (real sibling-repository migrations)
+is the next priority; each candidate application requires its own separate,
+aligned implementation plan before work begins, per this file's workflow.
 
 ## Phase 1: Configuration foundation
 
@@ -100,22 +100,30 @@ workflow.
 
 ## Phase 4: Hosted architecture proof
 
-**Status:** Not started  
-**Plan:** pending
+**Status:** Done  
+**Plan:** [Phase 4 hosted architecture proof](plans/2026-08-15-phase-4-hosted-architecture-proof.md)
 
-- [ ] Define and version the shared hosted adapter TypeScript contract.
-- [ ] Implement compiled adapter loading, compatibility checks, initialization,
-  status collection, route/static mounting, realtime dispatch, and disposal.
-- [ ] Add independent fixture adapters for routes, static assets, SPA fallback,
-  WebSockets, Socket.IO, degradation, failure, active work, and cleanup.
-- [ ] Verify route, filesystem, browser-origin, and shared-server isolation rules.
-- [ ] Implement bounded graceful shutdown and structured application-scoped logging
+- [x] Define and version the shared hosted adapter TypeScript contract
+  (`src/contracts/hostedApplication.ts`).
+- [x] Implement compiled adapter loading, compatibility checks, initialization,
+  status collection, route/static mounting, realtime dispatch, and disposal
+  (`src/services/ApplicationHost.ts`).
+- [x] Add independent fixture adapters for routes, static assets, SPA fallback,
+  WebSockets, Socket.IO, degradation, failure, active work, and cleanup
+  (`test/fixtures/adapters/`).
+- [x] Verify route, filesystem, browser-origin, and shared-server isolation rules.
+- [x] Implement bounded graceful shutdown and structured application-scoped logging
   consistent with the draft
-  [logging and OpenTelemetry evolution intentions](features/2026-08-15-logging-and-opentelemetry-intentions.md).
+  [logging and OpenTelemetry evolution intentions](features/2026-08-15-logging-and-opentelemetry-intentions.md)
+  (`src/logging/`).
 
-- [ ] **Acceptance gate:** Fixtures prove import safety, deterministic realtime
+- [x] **Acceptance gate:** Fixtures prove import safety, deterministic realtime
   ownership, reverse-order idempotent disposal, no open handles, safe degraded
-  startup, and no cross-application route or SPA fallback collisions.
+  startup, and no cross-application route or SPA fallback collisions. Verified
+  by `test/services/ApplicationHost.test.ts`,
+  `test/integration/hostedApplications.test.ts`, and the full `npm test` /
+  `npm run typecheck` / `npm run build` run recorded when this phase was
+  completed.
 
 ## Phase 5: Candidate application integrations
 

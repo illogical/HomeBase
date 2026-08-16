@@ -455,17 +455,38 @@ the HomeBase process.
 
 ### Decisions required before approval
 
-- the HomeBase runtime-data root and configuration/environment contract;
-- initial file size, time, retained-count, retained-age, and total-disk limits;
-- file permissions and whether local development mirrors every level to a pretty
-  console;
-- whether local file-sink failure changes HomeBase readiness or only internal
-  operational status;
-- the maximum flush deadline and pressure/drop policy;
-- whether the Phase 6 production source is the local file, structured stdout, or
-  one canonical sink with the other disabled; and
+Every item scoped to Phase 4 below is now resolved by the
+[Phase 4 hosted architecture proof](../plans/2026-08-15-phase-4-hosted-architecture-proof.md)
+and implemented at `src/logging/` (`NdjsonSink.ts`, `RootLogger.ts`,
+`redact.ts`, `requestContext.ts`); see `docs/SPECIFICATION.md` §7 for the
+resulting contract text:
+
+- ~~the HomeBase runtime-data root and configuration/environment contract~~ —
+  resolved: required `HOMEBASE_DATA_PATH`, validated identically to
+  `HOMEBASE_WORKSPACE_PATH`, with `<HOMEBASE_DATA_PATH>/homebase/log/` as the
+  log directory.
+- ~~initial file size, time, retained-count, retained-age, and total-disk
+  limits~~ — resolved: 50 MiB active-file rotation, UTC-midnight time-based
+  rotation, 7 retained rotated files, 500 MiB total-disk soft budget (oldest
+  rotated file deleted first).
+- ~~file permissions and whether local development mirrors every level to a
+  pretty console~~ — resolved: process-default umask, no additional `chmod`
+  (v1 is single-tenant per container/dev machine); outside
+  `NODE_ENV=production`, `info` and above are mirrored to the console as a
+  single readable line per record.
+- ~~whether local file-sink failure changes HomeBase readiness or only
+  internal operational status~~ — resolved: a write failure falls back to one
+  structured `stderr` line per dropped record and sets an internal, non-public
+  `loggingDegraded` flag; it never changes `GET /health` or `GET /ready`.
+- ~~the maximum flush deadline and pressure/drop policy~~ — resolved: a
+  bounded `flush(2000)` runs once during shutdown, after all adapters have
+  been disposed; a per-record write failure is dropped (with the stderr
+  fallback above) rather than retried unboundedly.
+- whether the Phase 6 production source is the local file, structured stdout,
+  or one canonical sink with the other disabled — **still open**, deferred to
+  the Phase 6 Docker/Tailnet packaging plan.
 - later central backend, collector placement, access control, retention, and
-  alert destinations.
+  alert destinations — **still open**, deferred to Phases C–F below.
 
 ## Initial-plan acceptance gate
 
@@ -476,3 +497,9 @@ application prove standalone and hosted parity, import safety, separate
 concurrent writers, redaction, bounded persistence, failure fallback, and clean
 disposal. Centralized observability remains a separate later acceptance gate and
 must not be claimed from local-file logging alone.
+
+Phase 4 proves the HomeBase-fixtures half of this gate: import safety,
+redaction, bounded persistence (rotation and size limits), failure fallback,
+and clean disposal are all verified against nine fixture adapters and
+HomeBase's own `RootLogger`/`NdjsonSink`. Standalone-versus-hosted parity for a
+real participating application remains Phase 5 scope and is not claimed here.
