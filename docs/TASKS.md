@@ -134,8 +134,25 @@ Each update below must inspect that repository's current implementation and loca
 guidance. It must preserve standalone operation and receive its own approved plan
 before any repository changes:
 
-- [ ] DevPlanner adapter and base-path migration — **Not started** — Plan: pending
-- [ ] LMApi adapter and base-path migration — **Not started** — Plan: pending
+- [ ] DevPlanner adapter and base-path migration — **In progress** — Plan:
+  [DevPlanner HomeBase integration plan](file:///C:/LocalDev/Projects/DevPlanner/docs/plans/2026-08-16-homebase-integration.md)
+  (external repository; see also that repo's
+  [migration handoff](file:///C:/LocalDev/Projects/DevPlanner/docs/features/homebase-integration-handoff.md)).
+  Migration, hosted adapter, base-path work, and test-suite migration are
+  complete and were verified live against a real running HomeBase process
+  (page load, static assets, SPA routing, API, WebSocket, live card-update
+  broadcast). One DevPlanner-side bug was found and fixed
+  (`notFoundHandler` scoping). One HomeBase-side bug was found — the bare
+  `GET /devplanner/` route infinite-redirect-looped because the
+  trailing-slash-redirect route also matched the already-canonical path —
+  and has since been fixed here in `34e0115` (`ApplicationHost.ts`'s
+  `mountApplication` now guards with `request.path === basePath`). **Next
+  step:** re-run DevPlanner's live verification matrix end-to-end now that
+  this fix has landed, then check this item and its portion of the
+  acceptance gate.
+- [ ] LMApi adapter and base-path migration — **Not started** — Plan:
+  [LMApi HomeBase integration plan](file:///C:/LocalDev/Projects/LMApi/docs/plans/2026-08-16-homebase-integration.md)
+  (external repository; phased plan approved, implementation not yet begun).
 - [ ] MemoryApi adapter and base-path migration — **Not started** — Plan: pending
 - [ ] LMEval adapter and base-path migration — **Not started** — Plan: pending
 
@@ -147,7 +164,8 @@ before any repository changes:
 ## Phase 6: Container and Tailnet rollout
 
 **Status:** Not started  
-**Plan:** pending
+**Plan:** [Phase 6 container and Tailnet rollout](plans/2026-08-16-phase-6-container-and-tailnet-rollout.md)
+(Draft; approval pending)
 
 - [ ] Add Docker packaging for one Node process and shared HTTP listener.
 - [ ] Publish the environment-configured port on host loopback only.
