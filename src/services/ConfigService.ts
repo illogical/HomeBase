@@ -459,10 +459,10 @@ async function normalizeApplications(
       );
     }
 
-    if (application.enabled) {
-      await requireEnabledRepository(repositoryRoot, index);
-      await requireEnabledAdapter(adapterFile, index);
-    }
+    const startupIssue = application.enabled
+      ? (await checkEnabledRepository(repositoryRoot)) ??
+        (await checkEnabledAdapter(adapterFile))
+      : undefined;
 
     normalized.push({
       id: application.id,
@@ -485,6 +485,7 @@ async function normalizeApplications(
       sortOrder: application.sortOrder,
       dataPath: path.join(dataRoot, "apps", application.id),
       adapterConfig: application.adapterConfig,
+      startupIssue,
     });
   }
   return normalized;
@@ -570,33 +571,33 @@ function isMissing(cause: unknown): boolean {
   );
 }
 
-async function requireEnabledRepository(repositoryRoot: string, index: number): Promise<void> {
+async function checkEnabledRepository(
+  repositoryRoot: string,
+): Promise<ApplicationConfiguration["startupIssue"]> {
   try {
     const details = await stat(repositoryRoot);
     if (!details.isDirectory()) throw new Error("not a directory");
+    return undefined;
   } catch {
-    throw new ConfigurationError([
-      {
-        code: "ENABLED_REPOSITORY_MISSING",
-        path: `/applications/${index}/repoPath`,
-        message: "An enabled application requires an existing repository directory.",
-      },
-    ]);
+    return {
+      code: "ENABLED_REPOSITORY_MISSING",
+      message: "An enabled application requires an existing repository directory.",
+    };
   }
 }
 
-async function requireEnabledAdapter(adapterFile: string, index: number): Promise<void> {
+async function checkEnabledAdapter(
+  adapterFile: string,
+): Promise<ApplicationConfiguration["startupIssue"]> {
   try {
     await access(adapterFile);
     const details = await stat(adapterFile);
     if (!details.isFile()) throw new Error("not a file");
+    return undefined;
   } catch {
-    throw new ConfigurationError([
-      {
-        code: "ENABLED_ADAPTER_MISSING",
-        path: `/applications/${index}/adapterPath`,
-        message: "An enabled application requires an existing compiled adapter file.",
-      },
-    ]);
+    return {
+      code: "ENABLED_ADAPTER_MISSING",
+      message: "An enabled application requires an existing compiled adapter file.",
+    };
   }
 }

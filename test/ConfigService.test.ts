@@ -419,17 +419,23 @@ describe("ConfigService", () => {
     await expectIssue(load(current), "PATH_ESCAPES_PARENT", "/applications/0/adapterPath");
   });
 
-  it("requires enabled repository and adapter output without importing the adapter", async () => {
+  it("reports enabled repository/adapter gaps per-app without importing the adapter", async () => {
     const current = await fixture();
     const registry = validRegistry();
     registry.applications = [registry.applications[0]!];
     registry.applications[0]!.enabled = true;
     await current.writeRegistry(registry);
-    await expectIssue(load(current), "ENABLED_REPOSITORY_MISSING");
+    const missingRepo = await load(current);
+    expect(missingRepo.applications[0]?.startupIssue).toEqual(
+      expect.objectContaining({ code: "ENABLED_REPOSITORY_MISSING" }),
+    );
 
     const repository = path.join(current.workspaceRoot, "FirstApp");
     await mkdir(repository);
-    await expectIssue(load(current), "ENABLED_ADAPTER_MISSING");
+    const missingAdapter = await load(current);
+    expect(missingAdapter.applications[0]?.startupIssue).toEqual(
+      expect.objectContaining({ code: "ENABLED_ADAPTER_MISSING" }),
+    );
 
     const adapter = path.join(repository, "dist/host/index.js");
     const marker = path.join(current.root, "adapter-imported");
@@ -441,6 +447,7 @@ describe("ConfigService", () => {
     );
     const service = await load(current);
     expect(service.applications[0]?.enabled).toBe(true);
+    expect(service.applications[0]?.startupIssue).toBeUndefined();
     await expect(readFile(marker, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 

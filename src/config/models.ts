@@ -35,6 +35,12 @@ export interface ApplicationConfiguration {
   readonly sortOrder: number | undefined;
   readonly dataPath: string;
   readonly adapterConfig: Readonly<Record<string, unknown>> | undefined;
+  readonly startupIssue:
+    | {
+        readonly code: "ENABLED_REPOSITORY_MISSING" | "ENABLED_ADAPTER_MISSING";
+        readonly message: string;
+      }
+    | undefined;
 }
 
 export interface HomeBaseConfiguration {

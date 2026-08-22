@@ -1,8 +1,7 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ConfigurationError } from "../../src/config/ConfigurationError.js";
 import { startServer, type StartedHomeBase } from "../../src/startServer.js";
 import { createConfigFixture, type ConfigFixture } from "../support/configFixture.js";
 import { fixtureAdaptersWorkspaceRoot, fixtureApplication } from "../support/fixtureAdapters.js";
@@ -90,10 +89,25 @@ describe("startServer end-to-end with hosted fixtures", () => {
     expect(dashboard.close).toHaveBeenCalledOnce();
   });
 
-  it("still enforces the pre-existing ENABLED_ADAPTER_MISSING startup rejection", async () => {
+  it("isolates a missing compiled adapter to just that app instead of failing the whole boot", async () => {
     const fixture = await buildFixture();
-    const repository = path.join(fixture.workspaceRoot, "broken-app");
-    await mkdir(repository, { recursive: true });
+    const brokenRepository = path.join(fixture.workspaceRoot, "broken-app");
+    await mkdir(brokenRepository, { recursive: true });
+
+    const healthyRepository = path.join(fixture.workspaceRoot, "healthy-app");
+    await mkdir(healthyRepository, { recursive: true });
+    await writeFile(
+      path.join(healthyRepository, "index.ts"),
+      `export default () => ({
+  contractVersion: 1,
+  async getStatus() {
+    return { state: "ready", summary: "Healthy fixture ready.", since: new Date().toISOString() };
+  },
+});
+`,
+      "utf8",
+    );
+
     await fixture.writeRegistry({
       schemaVersion: 1,
       server: { port: 17000 },
@@ -108,11 +122,22 @@ describe("startServer end-to-end with hosted fixtures", () => {
           adapterPath: "dist/host/index.js",
           contractVersion: 1,
         },
+        {
+          id: "healthy-app",
+          displayName: "Healthy App",
+          description: "A working sibling app that must stay up.",
+          slug: "healthy-app",
+          enabled: true,
+          repoPath: "healthy-app",
+          adapterPath: "index.ts",
+          contractVersion: 1,
+        },
       ],
     });
 
-    await expect(
-      startServer({
+    let started: StartedHomeBase | undefined;
+    try {
+      started = await startServer({
         config: {
           projectRoot: fixture.projectRoot,
           environment: {
@@ -123,7 +148,22 @@ describe("startServer end-to-end with hosted fixtures", () => {
         },
         initializeDashboard: fakeDashboard().initializeDashboard,
         listen: vi.fn(async () => undefined),
-      }),
-    ).rejects.toBeInstanceOf(ConfigurationError);
+      });
+
+      const listing = await request(started.app).get("/api/applications");
+      expect(listing.status).toBe(200);
+      expect(listing.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "broken-app",
+            state: "unavailable",
+            statusSummary: expect.stringContaining("compiled adapter"),
+          }),
+          expect.objectContaining({ id: "healthy-app", state: "ready" }),
+        ]),
+      );
+    } finally {
+      await started?.close();
+    }
   });
 });

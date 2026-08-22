@@ -257,8 +257,17 @@ both without rebuilding the image. A named volume
 
 `docker-compose.dev.yml` and `docker-compose.yml` publish the same host port
 by default, so only one can run at a time unless you override
-`HOMEBASE_PORT` for one of them — stop the other with `docker compose -f
-<file> down` first.
+`HOMEBASE_PORT` for one of them — stop the other first:
+
+```sh
+# switching from prod to dev
+docker compose --env-file .env.docker -f docker-compose.yml down
+docker compose --env-file .env.docker -f docker-compose.dev.yml up -d --build
+
+# switching from dev to prod
+docker compose --env-file .env.docker -f docker-compose.dev.yml down
+docker compose --env-file .env.docker -f docker-compose.yml up -d --build
+```
 
 Both watchers run in polling mode (`CHOKIDAR_USEPOLLING=true` for Vite;
 `nodemon --legacy-watch` for the backend, in place of the local `npm run

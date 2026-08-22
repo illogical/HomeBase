@@ -21,6 +21,10 @@ services:
       - .:/app
       - homebase-dev-node-modules:/app/node_modules
       - ${HOMEBASE_HOST_WORKSPACE_PATH}:/workspace:ro
+      - devplanner-node-modules:/workspace/DevPlanner/node_modules
+      - lmapi-node-modules:/workspace/LMApi/node_modules
+      - memoryapi-node-modules:/workspace/MemoryApi/node_modules
+      - lmeval-node-modules:/workspace/LMEval/node_modules
       - ${HOMEBASE_HOST_DATA_PATH}:/data:rw
       - ${HOMEBASE_HOST_CONFIG_PATH}:/app/config/homebase.json:ro
       - ${HOMEBASE_HOST_DEVPLANNER_WORKSPACE_PATH}:/mnt/devplanner-workspace:rw
@@ -28,3 +32,7 @@ services:
 
 volumes:
   homebase-dev-node-modules:
+  devplanner-node-modules:
+  lmapi-node-modules:
+  memoryapi-node-modules:
+  lmeval-node-modules:

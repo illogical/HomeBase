@@ -276,6 +276,18 @@ async function loadOne(
     };
   }
 
+  if (application.startupIssue) {
+    logger.log("error", "load-failed", application.startupIssue.message);
+    return {
+      application,
+      state: "unavailable",
+      summary: application.startupIssue.message,
+      since,
+      instance: undefined,
+      realtimeDisposer: undefined,
+    };
+  }
+
   logger.log("info", "load-begin", "Loading hosted adapter.");
 
   let instance: HostedApplication;
