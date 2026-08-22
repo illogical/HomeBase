@@ -100,22 +100,41 @@ function ApplicationCollection({ applications, error, retry }: ApplicationCollec
 
 function ApplicationCard({ application }: { readonly application: DashboardApplication }) {
   const monogram = application.displayName.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
+  const isReady = application.state === "ready";
   return (
     <article className={`application-card state-${application.state}`}>
       <div className="card-heading">
-        <div className="app-monogram" aria-hidden="true">{monogram}</div>
+        {isReady ? (
+          <a href={application.basePath} rel="noopener noreferrer">
+            <div className="app-monogram" aria-hidden="true">{monogram}</div>
+          </a>
+        ) : (
+          <div className="app-monogram" aria-hidden="true">{monogram}</div>
+        )}
         <span className="status-badge">
           <span className="status-dot" aria-hidden="true" />
           {stateLabels[application.state]}
         </span>
       </div>
       <div className="card-copy">
-        <h3>{application.displayName}</h3>
+        {isReady ? (
+          <a href={application.basePath} rel="noopener noreferrer">
+            <h3>{application.displayName}</h3>
+          </a>
+        ) : (
+          <h3>{application.displayName}</h3>
+        )}
         <p className="description">{application.description}</p>
       </div>
       <div className="card-status">
-        <p>{application.statusSummary}</p>
-        <code>{application.basePath}</code>
+        {application.state !== "ready" ? <p>{application.statusSummary}</p> : null}
+        {isReady ? (
+          <a href={application.basePath} rel="noopener noreferrer">
+            <code>{application.basePath}</code>
+          </a>
+        ) : (
+          <code>{application.basePath}</code>
+        )}
       </div>
     </article>
   );

@@ -194,6 +194,22 @@ mounted read-only). The `--env-file` flag is required in addition to the
 `.env.docker.example` for why. The container publishes its port on host
 loopback only (`127.0.0.1:<port>:<port>`); never omit that host qualifier.
 
+After changing `src/**`, `dashboard/src/**`, or any other file baked into the
+image, rebuild it and recreate the running container to pick up the change —
+the production container serves a static bundle compiled at build time, so
+edits on the host have no effect until it is rebuilt:
+
+```sh
+docker compose --env-file .env.docker -f docker-compose.yml build
+docker compose --env-file .env.docker -f docker-compose.yml up -d
+```
+
+or, equivalently, in one step:
+
+```sh
+docker compose --env-file .env.docker -f docker-compose.yml up -d --build
+```
+
 Host-managed Tailscale Serve then proxies `https://home.<tailnet>.ts.net` to
 that loopback port; Tailscale itself always runs on the host, never inside
 the container. Full commands, verified output, a rollback procedure, and an
@@ -212,6 +228,44 @@ The workspace path is interpreted by the running Node process. The Docker
 deployment mounts the host projects directory at `/workspace` and sets
 `HOMEBASE_WORKSPACE_PATH=/workspace` inside `docker-compose.yml`; it does not
 reuse a host-only absolute path inside the container.
+
+### Docker development mode
+
+A second, dev-only image and Compose file give the same edit-and-see-it-update
+loop as `npm run dev`, but running inside a container, using the same
+`.env.docker` as production:
+
+> [!NOTE]
+> Hot-reload only works while the **dev** container is the one running.
+> `docker ps` will show it as `homebase-homebase-dev-1`, image `homebase:dev`
+> — if instead `homebase:latest` is running, that's the production container
+> serving a static bundle baked in at build time, and edits will silently do
+> nothing until you switch containers (see below).
+
+```sh
+docker compose --env-file .env.docker -f docker-compose.dev.yml up -d --build
+```
+
+This builds the `dev` target (full `npm ci`, no build step, no baked source)
+and bind-mounts the whole repository into the container, so edits to
+`dashboard/src/**` update the browser via Vite HMR/Fast Refresh with no
+manual reload, and edits to `src/**` trigger an automatic backend restart —
+both without rebuilding the image. A named volume
+(`homebase-dev-node-modules`) keeps the container's own Linux-built
+`node_modules` in place underneath the bind mount; reset it with
+`docker compose -f docker-compose.dev.yml down -v` after a dependency change.
+
+`docker-compose.dev.yml` and `docker-compose.yml` publish the same host port
+by default, so only one can run at a time unless you override
+`HOMEBASE_PORT` for one of them — stop the other with `docker compose -f
+<file> down` first.
+
+Both watchers run in polling mode (`CHOKIDAR_USEPOLLING=true` for Vite;
+`nodemon --legacy-watch` for the backend, in place of the local `npm run
+dev` script's `node --watch`) because native `fs.watch`/inotify events from
+a Windows-host bind mount are not forwarded reliably through Docker Desktop.
+This is scoped to the Docker dev container only; local, non-Docker `npm run
+dev` is unaffected and keeps using native file-watch events.
 
 ## Initial technology baseline
 

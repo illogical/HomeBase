@@ -1,0 +1,30 @@
+services:
+  homebase-dev:
+    build:
+      context: .
+      target: dev
+    image: homebase:dev
+    env_file:
+      - .env.docker
+    environment:
+      HOMEBASE_WORKSPACE_PATH: /workspace
+      HOMEBASE_DATA_PATH: /data
+      # Polling fallback: native fs.watch/inotify events from a Windows-host
+      # bind mount are not forwarded reliably through Docker Desktop, so both
+      # Vite's chokidar watcher (via this env var) and the backend's nodemon
+      # (via --legacy-watch in the Dockerfile CMD) poll instead. Local
+      # (non-Docker) `npm run dev` is unaffected by this.
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "127.0.0.1:${HOMEBASE_PORT:-17106}:${HOMEBASE_PORT:-17106}"
+    volumes:
+      - .:/app
+      - homebase-dev-node-modules:/app/node_modules
+      - ${HOMEBASE_HOST_WORKSPACE_PATH}:/workspace:ro
+      - ${HOMEBASE_HOST_DATA_PATH}:/data:rw
+      - ${HOMEBASE_HOST_CONFIG_PATH}:/app/config/homebase.json:ro
+      - ${HOMEBASE_HOST_DEVPLANNER_WORKSPACE_PATH}:/mnt/devplanner-workspace:rw
+      - ${HOMEBASE_HOST_DEVPLANNER_VAULT_PATH}:/mnt/devplanner-vault:rw
+
+volumes:
+  homebase-dev-node-modules:

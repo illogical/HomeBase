@@ -10,6 +10,21 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
+# --- dev stage -----------------------------------------------------------
+# Placed before `runtime` so plain `docker build .` (no --target) still
+# defaults to the last stage, `runtime` — required for production builds.
+FROM node:24-slim AS dev
+WORKDIR /app
+ENV NODE_ENV=development
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["node", "scripts/healthcheck.mjs"]
+
+CMD ["npx", "nodemon", "--legacy-watch", "--watch", "src", "--ext", "ts,json", "--exec", "node --import tsx src/dev.ts"]
+
 # --- runtime stage -------------------------------------------------------
 FROM node:24-slim AS runtime
 WORKDIR /app

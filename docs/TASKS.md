@@ -208,6 +208,15 @@ before any repository changes:
   remains open only on second-Tailnet-device reachability, pending the admin
   approval noted above.
 
+- [x] Docker development mode with hot-reload — **Done** — Plan:
+  [Docker development mode with hot-reload](plans/2026-08-21-docker-development-hot-reload.md)
+  (dev-only `dev` build stage and `docker-compose.dev.yml`, additive to the
+  production image/Compose file above; verified build, health, backend
+  restart via `nodemon --legacy-watch`, and Vite HMR via
+  `CHOKIDAR_USEPOLLING`/`server.watch.usePolling` — both required as a
+  polling fallback since this Windows host's Docker Desktop does not forward
+  native bind-mount file-change events reliably).
+
 ## Phase 7: Deferred capabilities
 
 **Status:** Not started  
