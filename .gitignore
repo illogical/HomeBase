@@ -27,6 +27,7 @@ pnpm-debug.log*
 !.env.example
 !.env.docker.example
 /config/homebase.json
+/config/homebase.docker.json
 
 # Local runtime data and caches
 /.homebase/

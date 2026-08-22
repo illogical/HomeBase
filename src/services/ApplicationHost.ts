@@ -14,7 +14,11 @@ import {
 } from "../contracts/hostedApplication.js";
 import type { ConfigService } from "./ConfigService.js";
 
-const IMPORT_AND_FACTORY_TIMEOUT_MS = 5000;
+// Generous enough to cover module resolution over a Docker Desktop
+// Windows-host bind mount, where require()/import() directory-tree walks
+// against a large node_modules can be an order of magnitude slower than on
+// a native filesystem.
+const IMPORT_AND_FACTORY_TIMEOUT_MS = 30_000;
 const INITIALIZE_TIMEOUT_MS = 10_000;
 const ATTACH_REALTIME_TIMEOUT_MS = 5000;
 const STATUS_TIMEOUT_MS = 2000;

@@ -16,3 +16,5 @@ services:
       - ${HOMEBASE_HOST_WORKSPACE_PATH}:/workspace:ro
       - ${HOMEBASE_HOST_DATA_PATH}:/data:rw
       - ${HOMEBASE_HOST_CONFIG_PATH}:/app/config/homebase.json:ro
+      - ${HOMEBASE_HOST_DEVPLANNER_WORKSPACE_PATH}:/mnt/devplanner-workspace:rw
+      - ${HOMEBASE_HOST_DEVPLANNER_VAULT_PATH}:/mnt/devplanner-vault:rw
