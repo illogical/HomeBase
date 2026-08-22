@@ -1,0 +1,18 @@
+services:
+  homebase:
+    build:
+      context: .
+    image: homebase:latest
+    restart: unless-stopped
+    stop_grace_period: 25s
+    env_file:
+      - .env.docker
+    environment:
+      HOMEBASE_WORKSPACE_PATH: /workspace
+      HOMEBASE_DATA_PATH: /data
+    ports:
+      - "127.0.0.1:${HOMEBASE_PORT:-17106}:${HOMEBASE_PORT:-17106}"
+    volumes:
+      - ${HOMEBASE_HOST_WORKSPACE_PATH}:/workspace:ro
+      - ${HOMEBASE_HOST_DATA_PATH}:/data:rw
+      - ${HOMEBASE_HOST_CONFIG_PATH}:/app/config/homebase.json:ro

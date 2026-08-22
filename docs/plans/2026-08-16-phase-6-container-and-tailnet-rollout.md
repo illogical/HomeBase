@@ -1,8 +1,11 @@
 # Phase 6: Container and Tailnet Rollout
 
-**Status:** Draft
+**Status:** Implemented (see
+[the container and Tailnet deployment doc](../features/2026-08-16-container-and-tailnet-deployment.md)
+for the verification record; second-device Tailnet reachability is pending
+tailnet-admin approval, tracked in `docs/TASKS.md`)
 
-**Approved:** pending
+**Approved:** by implementation request, 2026-08-16
 
 **Depends on:** Phases 1–4 (complete) providing the configuration runtime,
 `ApplicationHost`, `/health`/`/ready`, and bounded shutdown this plan packages

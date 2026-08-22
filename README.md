@@ -11,8 +11,13 @@ Tailnet address, with concise top-level routes such as `/devplanner`, `/lmapi`,
 > `ConfigService`, and the hosted-application architecture proof (import-safe
 > adapter loading, mounting, realtime attachment, structured logging, and
 > bounded shutdown) are all implemented and verified with automated checks.
-> Real sibling-repository migration (Phase 5), Docker packaging, and Tailnet
-> rollout (Phase 6) remain planned work unless stated otherwise.
+> Docker packaging and Tailnet rollout (Phase 6) are implemented and verified
+> for build, local/loopback run, health, graceful stop, rollback, and
+> Tailscale Serve mechanics; reachability from a second physical Tailnet
+> device is pending tailnet-admin approval of the named service (see
+> `docs/features/2026-08-16-container-and-tailnet-deployment.md`). Real
+> sibling-repository migration (Phase 5) remains planned work unless stated
+> otherwise.
 
 ## Project goals
 
@@ -164,11 +169,37 @@ npm run build
 npm start
 ```
 
-Phase 3 does not include Docker packaging. On Windows, install Node.js 24, use
-the same local configuration files, and run `npm ci`, `npm run typecheck`,
-`npm test`, `npm run build`, and `npm start` before reviewing the dashboard and
-`/api/applications`, `/health`, and `/ready` in a browser. Docker and Tailnet
-verification are deferred to Phase 6.
+On Windows, install Node.js 24, use the same local configuration files, and
+run `npm ci`, `npm run typecheck`, `npm test`, `npm run build`, and
+`npm start` before reviewing the dashboard and `/api/applications`, `/health`,
+and `/ready` in a browser.
+
+## Docker and Tailnet deployment
+
+HomeBase also runs as one Docker container with one Node process and one
+shared HTTP server, per `docs/SPECIFICATION.md` §2. From a clean clone:
+
+```sh
+docker build -t homebase:latest .
+cp .env.docker.example .env.docker   # fill in real absolute host paths
+docker compose --env-file .env.docker -f docker-compose.yml up -d
+```
+
+`.env.docker` (git-ignored) supplies `HOMEBASE_HOST_WORKSPACE_PATH` (mounted
+read-only at `/workspace`), `HOMEBASE_HOST_DATA_PATH` (mounted read-write at
+`/data`; must already exist and be writable by UID 1000 before the first
+run), and `HOMEBASE_HOST_CONFIG_PATH` (the operational, git-ignored registry,
+mounted read-only). The `--env-file` flag is required in addition to the
+`env_file:` entry already in `docker-compose.yml` — see
+`.env.docker.example` for why. The container publishes its port on host
+loopback only (`127.0.0.1:<port>:<port>`); never omit that host qualifier.
+
+Host-managed Tailscale Serve then proxies `https://home.<tailnet>.ts.net` to
+that loopback port; Tailscale itself always runs on the host, never inside
+the container. Full commands, verified output, a rollback procedure, and an
+honest account of what has and has not been end-to-end verified from a
+second Tailnet device are in
+[the container and Tailnet deployment doc](docs/features/2026-08-16-container-and-tailnet-deployment.md).
 
 The root `.env` and operational registry are intentionally ignored. The tracked
 `.env.example` and `config/homebase.example.json` are safe starting points.
@@ -177,10 +208,10 @@ The root `.env` and operational registry are intentionally ignored. The tracked
 a path relative to the HomeBase repository root. Invalid overrides prevent
 startup rather than silently falling back.
 
-The workspace path is interpreted by the running Node process. A future Docker
-deployment might mount the host projects directory at `/workspace` and set
-`HOMEBASE_WORKSPACE_PATH=/workspace`; it should not reuse a host-only absolute
-path inside the container.
+The workspace path is interpreted by the running Node process. The Docker
+deployment mounts the host projects directory at `/workspace` and sets
+`HOMEBASE_WORKSPACE_PATH=/workspace` inside `docker-compose.yml`; it does not
+reuse a host-only absolute path inside the container.
 
 ## Initial technology baseline
 

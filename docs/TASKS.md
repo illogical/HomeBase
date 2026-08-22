@@ -33,9 +33,13 @@ authorization to implement the item.
 
 ## Current priority
 
-Phases 1 through 4 are complete. Phase 5 (real sibling-repository migrations)
-is the next priority; each candidate application requires its own separate,
-aligned implementation plan before work begins, per this file's workflow.
+Phases 1 through 4 are complete. Phase 6 (container and Tailnet rollout) is
+implemented and verified except for one external step: approving the real
+`svc:home` Tailscale service in the tailnet admin console and confirming
+access from a second Tailnet device (see Phase 6 below). Phase 5 (real
+sibling-repository migrations) remains a separate priority; each candidate
+application requires its own separate, aligned implementation plan before
+work begins, per this file's workflow.
 
 ## Phase 1: Configuration foundation
 
@@ -163,24 +167,46 @@ before any repository changes:
 
 ## Phase 6: Container and Tailnet rollout
 
-**Status:** Not started  
-**Plan:** [Phase 6 container and Tailnet rollout](plans/2026-08-16-phase-6-container-and-tailnet-rollout.md)
-(Draft; approval pending)
+**Status:** In progress  
+**Plan:** [Phase 6 container and Tailnet rollout](plans/2026-08-16-phase-6-container-and-tailnet-rollout.md),
+[container and Tailnet deployment doc](features/2026-08-16-container-and-tailnet-deployment.md)
+(implemented; second-device Tailnet verification pending)
 
-- [ ] Add Docker packaging for one Node process and shared HTTP listener.
-- [ ] Publish the environment-configured port on host loopback only.
-- [ ] Mount the workspace root and application-scoped writable data locations using
-  documented ownership and access modes.
-- [ ] Add container health/readiness checks and graceful stop behavior.
-- [ ] Document host-managed Tailscale Serve configuration without mutating it from
-  HomeBase.
+- [x] Add Docker packaging for one Node process and shared HTTP listener
+  (`Dockerfile`, `.dockerignore`).
+- [x] Publish the environment-configured port on host loopback only
+  (`docker-compose.yml`; verified `docker port` shows `127.0.0.1:<port>`).
+- [x] Mount the workspace root and application-scoped writable data locations using
+  documented ownership and access modes (`.env.docker.example`; verified
+  read-only workspace, writable data directory, UID 1000 ownership).
+- [x] Add container health/readiness checks and graceful stop behavior
+  (`scripts/healthcheck.mjs`, `HEALTHCHECK`, `stop_grace_period`; verified
+  `healthy` status, and a `docker stop` completing via HomeBase's own
+  `shutdown-begin`/`shutdown-complete` sequence well inside the watchdog).
+- [x] Document host-managed Tailscale Serve configuration without mutating it from
+  HomeBase (verified command syntax against the real installed CLI, and
+  verified via a before/after JSON diff that starting/stopping the container
+  does not change `tailscale serve status`).
 - [ ] Verify localhost and `home.<tailnet>.ts.net` access, restart behavior, failure
-  reporting, rollback, and teardown.
+  reporting, rollback, and teardown. Localhost access, `docker kill` +
+  `restart: unless-stopped` recovery, a misconfigured-mount failure reporting
+  the existing actionable `ConfigurationError`, a full rollback rehearsal
+  (tag, roll forward, roll back, no data loss), and independently-scoped
+  teardown are all verified — see the deployment doc's verification table.
+  **Not yet verified:** `https://home.<tailnet>.ts.net` reachability from a
+  second, physically separate Tailnet device — the current tailnet requires
+  admin approval before a newly named Tailscale service becomes reachable,
+  and that approval was not obtained during implementation (see the
+  deployment doc §8). **Next step:** approve the real `svc:home` service in
+  the tailnet admin console, then complete this check from a second device.
 
 - [ ] **Acceptance gate:** A documented clean deployment works from localhost and a
   second Tailnet device; unhealthy optional applications do not make HomeBase
   readiness dishonest; and the previous deployment can be restored using the
-  documented rollback procedure.
+  documented rollback procedure. Localhost, readiness-honesty (unchanged
+  `/health`/`/ready` routes, per §6), and rollback are verified. The gate
+  remains open only on second-Tailnet-device reachability, pending the admin
+  approval noted above.
 
 ## Phase 7: Deferred capabilities
 

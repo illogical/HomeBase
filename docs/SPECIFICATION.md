@@ -66,9 +66,17 @@ are always relative to this root.
 For local host development, npm scripts optionally load a root `.env`; values
 already present in the process environment take precedence. The tracked
 `.env.example` documents the supported variables, while `.env` and its local
-variants remain ignored. A host path such as `/Users/matt/dev/projects` and a
-future container path such as `/workspace` may identify the same mounted content
-but are separate runtime values.
+variants remain ignored. A host path such as `/Users/matt/dev/projects` and the
+container path `/workspace` may identify the same mounted content but are
+separate runtime values.
+
+The first container implementation (Phase 6) mounts `HOMEBASE_WORKSPACE_PATH`
+at `/workspace` read-only and `HOMEBASE_DATA_PATH` at `/data` read-write, both
+as Docker bind mounts with explicit host paths supplied via a git-ignored
+`.env.docker`; see
+[the container and Tailnet deployment doc](features/2026-08-16-container-and-tailnet-deployment.md)
+for the exact commands. This confirms, rather than changes, the read-only
+workspace / read-write data split already implied above.
 
 Repository source and build output are distinct from mutable runtime data. Each
 hosted application receives an explicit application-scoped writable data path.

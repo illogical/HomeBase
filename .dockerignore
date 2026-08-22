@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+.git
+.env
+.env.*
+!.env.docker.example
+!.env.example
+config/homebase.json
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+tmp-review
