@@ -39,6 +39,7 @@ describe("dashboard hosting", () => {
     });
     expect(createViteServer).toHaveBeenCalledWith({
       root: join(projectRoot, "dashboard"),
+      configFile: join(projectRoot, "vite.config.ts"),
       appType: "custom",
       server: {
         middlewareMode: true,

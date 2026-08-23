@@ -1,5 +1,5 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 
 // Docker Desktop on Windows does not reliably forward native fs.watch/inotify
 // events for a bind-mounted repository, so Vite's watcher must fall back to
@@ -8,14 +8,27 @@ import { defineConfig } from "vite";
 // using native events.
 const usePolling = process.env.CHOKIDAR_USEPOLLING === "true";
 
-export default defineConfig({
-  root: "dashboard",
-  plugins: [react()],
-  build: {
-    outDir: "../dist/dashboard",
-    emptyOutDir: false,
-    assetsDir: "assets",
-    sourcemap: false,
-  },
-  server: usePolling ? { watch: { usePolling: true } } : undefined,
+export default defineConfig(({ mode }) => {
+  // Loads .env/.env.local from the repo root (git-ignored) in addition to
+  // process.env, without requiring a VITE_ prefix since this only runs in
+  // config/node context, never bundled into client code.
+  const env = loadEnv(mode, process.cwd(), "");
+  const allowedHosts = env.VITE_DEV_ALLOWED_HOSTS
+    ? env.VITE_DEV_ALLOWED_HOSTS.split(",").map((host) => host.trim())
+    : undefined;
+
+  return {
+    root: "dashboard",
+    plugins: [react()],
+    build: {
+      outDir: "../dist/dashboard",
+      emptyOutDir: false,
+      assetsDir: "assets",
+      sourcemap: false,
+    },
+    server: {
+      ...(allowedHosts ? { allowedHosts } : {}),
+      ...(usePolling ? { watch: { usePolling: true } } : {}),
+    },
+  };
 });

@@ -57,6 +57,11 @@ async function initializeDevelopmentDashboard(
   const createVite = createViteServer ?? (await import("vite")).createServer;
   const vite = await createVite({
     root: dashboardRoot,
+    // Vite's config-file auto-discovery only searches `root` itself, and
+    // `root` here is the "dashboard" subfolder, not the repo root where
+    // vite.config.ts lives. Without this, server.allowedHosts (and other
+    // settings) from vite.config.ts are silently never applied here.
+    configFile: join(projectRoot, "vite.config.ts"),
     appType: "custom",
     server: {
       middlewareMode: true,
