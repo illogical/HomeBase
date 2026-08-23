@@ -173,6 +173,10 @@ p {
   box-shadow: 0 10px 24px rgb(0 0 0 / 12%);
 }
 
+.application-card a {
+  text-decoration: none;
+}
+
 .state-ready { --state-color: var(--ready); }
 .state-degraded { --state-color: var(--degraded); }
 .state-disabled { --state-color: var(--disabled); }
@@ -234,7 +238,6 @@ p {
 }
 
 .card-status {
-  margin-top: auto;
   padding-top: 28px;
 }
 

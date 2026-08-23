@@ -47,12 +47,15 @@ function runGit(args: readonly string[], cwd: string, timeoutMs: number): Promis
       "git",
       args,
       { cwd, windowsHide: true, timeout: timeoutMs, maxBuffer: MAX_BUFFER_BYTES },
-      (error, stdout) => {
+      (error, stdout, stderr) => {
         if (!error) {
           resolve({ stdout: stdout.trim(), exitCode: 0, timedOut: false, notInstalled: false });
           return;
         }
         const failure = error as NodeJS.ErrnoException & { code?: number | string; killed?: boolean; signal?: string };
+        if (failure.code !== "ENOENT") {
+          console.error(`git ${args.join(" ")} failed in ${cwd}: ${stderr?.trim() || error.message}`);
+        }
         resolve({
           stdout: stdout?.trim() ?? "",
           exitCode: typeof failure.code === "number" ? failure.code : 1,
