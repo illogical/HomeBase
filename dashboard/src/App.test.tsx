@@ -6,7 +6,15 @@ import axe from "axe-core";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { FixtureDashboardDataSource } from "./fixtures";
-import type { DashboardApplication, DashboardDataSource } from "./models";
+import type { DashboardApplication, DashboardDataSource, GitMutationResult, GitStatus } from "./models";
+
+function neverGitStatus(): Promise<GitStatus> {
+  return new Promise<GitStatus>(() => undefined);
+}
+
+function neverGitMutation(): Promise<GitMutationResult> {
+  return new Promise<GitMutationResult>(() => undefined);
+}
 
 describe("dashboard application", () => {
   it("renders the semantic mixed fixture without launch controls", async () => {
@@ -30,7 +38,12 @@ describe("dashboard application", () => {
       expect(scoped.getByText(state)).toBeInTheDocument();
       expect(scoped.getByText(route)).toBeInTheDocument();
       expect(scoped.queryByRole("link")).not.toBeInTheDocument();
-      expect(scoped.queryByRole("button")).not.toBeInTheDocument();
+      if (state === "Ready") {
+        // The ready card renders a GitStatusPanel with Refresh/Fetch/Pull controls.
+        await waitFor(() => expect(scoped.queryByRole("button")).not.toBeNull());
+      } else {
+        expect(scoped.queryByRole("button")).not.toBeInTheDocument();
+      }
     }
   });
 
@@ -60,6 +73,9 @@ describe("dashboard application", () => {
         receivedSignal = signal;
         return new Promise<readonly DashboardApplication[]>(() => undefined);
       },
+      getGitStatus: neverGitStatus,
+      fetchGit: neverGitStatus,
+      pullGit: neverGitMutation,
     };
     const { unmount } = render(<App dataSource={dataSource} />);
 
@@ -97,6 +113,9 @@ describe("dashboard application", () => {
   it("has no automated accessibility violations in the failure/retry state", async () => {
     const dataSource: DashboardDataSource = {
       listApplications: vi.fn(async () => Promise.reject(new Error("fixture failure"))),
+      getGitStatus: neverGitStatus,
+      fetchGit: neverGitStatus,
+      pullGit: neverGitMutation,
     };
     const { container } = render(<App dataSource={dataSource} />);
     await screen.findByRole("button", { name: "Retry loading applications" });
@@ -113,6 +132,9 @@ describe("dashboard application", () => {
         .mockResolvedValueOnce(
           await new FixtureDashboardDataSource("mixed").listApplications(),
         ),
+      getGitStatus: neverGitStatus,
+      fetchGit: neverGitStatus,
+      pullGit: neverGitMutation,
     };
     const user = userEvent.setup();
     render(<App dataSource={dataSource} />);

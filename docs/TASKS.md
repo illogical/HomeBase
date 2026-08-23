@@ -219,15 +219,57 @@ before any repository changes:
   polling fallback since this Windows host's Docker Desktop does not forward
   native bind-mount file-change events reliably).
 
-## Phase 7: Deferred capabilities
+## Phase 7: Git status dashboard integration
+
+**Status:** Done  
+**Plan:** [Git status dashboard integration](plans/2026-08-22-git-status-dashboard-integration.md)
+
+- [x] Add `GitStatusService` (branch, clean/dirty, upstream, ahead/behind via
+  the `git` CLI) with tests against real temporary repositories
+  (`src/services/GitStatusService.ts`, `test/services/GitStatusService.test.ts`).
+- [x] Add the `/api/homebase/applications/:id/git-status` read-only endpoint,
+  plus `/fetch` and `/pull` (fast-forward-only) mutating endpoints, with
+  route integration tests (`src/routes/homebaseGit.ts`,
+  `test/routes/homebaseGit.test.ts`).
+- [x] Add a dashboard `GitStatusPanel`, shown only on `ready`-state
+  application cards, with manual Refresh/Fetch/Pull controls and no
+  background polling (`dashboard/src/GitStatusPanel.tsx`).
+- [x] Update `docs/SPECIFICATION.md` documenting the new endpoints (§4.2a).
+
+- [x] **Acceptance gate:** Automated tests pass (`GitStatusService`,
+  `homebaseGit` route integration, and `GitStatusPanel` component tests, all
+  new and passing; pre-existing unrelated failures in `App.test.tsx`'s
+  link-name accessibility check and `ApplicationHost.test.ts`'s SPA-fallback
+  isolation test are unchanged from `main` and out of scope for this phase).
+  A live verification pass against a real running HomeBase instance
+  (a scratch registry entry pointing at a real git clone with a real bare
+  "upstream" remote) confirmed: clean vs. dirty `workingTree` reporting, a
+  real `fetch` advancing the reported `behind` count, a real fast-forward
+  `pull` advancing the checked-out commit and clearing `behind`, dirty-tree
+  pull rejection (`409`, `error: "dirty-tree"`), and overlapping-request
+  rejection (`409`, `error: "operation-in-progress"`) for two concurrent
+  fetches against the same application.
+
+**Follow-up (2026-08-22):** the live Docker `dev` container was found to lack
+the `git` binary (`node:24-slim` base image) and mounted `/workspace` as
+`:ro`, so status/fetch/pull all failed there despite the checks above passing
+against a local (non-Docker) instance. Fixed: `git` is now installed in both
+the `dev` and `runtime` Dockerfile stages, and `/workspace` is mounted `:rw`
+in both Compose files. See `docs/SPECIFICATION.md` §2/§4.2a and the
+container/Tailnet deployment doc for the updated contract; this assumes
+public repositories only (no credential wiring was added for private
+remotes).
+
+## Phase 8: Deferred capabilities
 
 **Status:** Not started  
 **Plan:** create one aligned plan per capability
 
 - [ ] Coordinated cross-repository development watching, frontend HMR, and host
   restart behavior.
-- [ ] Read-only Git checkout, upstream, build, and loaded-revision visibility.
-- [ ] Git pull, dependency installation, build verification, restart, and rollback.
+- [ ] Build and loaded-revision visibility.
+- [ ] Dependency installation, build verification, restart, and rollback after
+  a pull.
 - [ ] Per-user authentication and authorization, audit events, and administration.
 - [ ] Centralized observability, OpenTelemetry collection, Git-revision
   correlation, and read-only HomeBase log/metric/trace views — **Not started** —

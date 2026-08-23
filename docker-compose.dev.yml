@@ -20,7 +20,7 @@ services:
     volumes:
       - .:/app
       - homebase-dev-node-modules:/app/node_modules
-      - ${HOMEBASE_HOST_WORKSPACE_PATH}:/workspace:ro
+      - ${HOMEBASE_HOST_WORKSPACE_PATH}:/workspace:rw
       - devplanner-node-modules:/workspace/DevPlanner/node_modules
       - lmapi-node-modules:/workspace/LMApi/node_modules
       - memoryapi-node-modules:/workspace/MemoryApi/node_modules

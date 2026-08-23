@@ -1,4 +1,4 @@
-import type { DashboardApplication, DashboardDataSource } from "./models";
+import type { DashboardApplication, DashboardDataSource, GitMutationResult, GitStatus } from "./models";
 
 export type FixtureScenario = "mixed" | "loading" | "empty";
 
@@ -39,6 +39,16 @@ const mixedApplications = Object.freeze([
 
 const emptyApplications = Object.freeze([]) as readonly DashboardApplication[];
 
+const fixtureGitStatus: GitStatus = Object.freeze({
+  branch: "main",
+  commit: "a1b2c3d",
+  workingTree: "clean",
+  upstream: "origin/main",
+  ahead: 0,
+  behind: 2,
+  checkedAt: new Date().toISOString(),
+});
+
 export class FixtureDashboardDataSource implements DashboardDataSource {
   constructor(private readonly scenario: FixtureScenario) {}
 
@@ -47,6 +57,18 @@ export class FixtureDashboardDataSource implements DashboardDataSource {
       return waitUntilAborted(signal);
     }
     return Promise.resolve(this.scenario === "empty" ? emptyApplications : mixedApplications);
+  }
+
+  getGitStatus(): Promise<GitStatus> {
+    return Promise.resolve(fixtureGitStatus);
+  }
+
+  fetchGit(): Promise<GitStatus> {
+    return Promise.resolve({ ...fixtureGitStatus, checkedAt: new Date().toISOString() });
+  }
+
+  pullGit(): Promise<GitMutationResult> {
+    return Promise.resolve({ ...fixtureGitStatus, behind: 0, checkedAt: new Date().toISOString(), pulled: true });
   }
 }
 

@@ -71,12 +71,17 @@ container path `/workspace` may identify the same mounted content but are
 separate runtime values.
 
 The first container implementation (Phase 6) mounts `HOMEBASE_WORKSPACE_PATH`
-at `/workspace` read-only and `HOMEBASE_DATA_PATH` at `/data` read-write, both
-as Docker bind mounts with explicit host paths supplied via a git-ignored
-`.env.docker`; see
+at `/workspace` and `HOMEBASE_DATA_PATH` at `/data`, both as Docker bind mounts
+with explicit host paths supplied via a git-ignored `.env.docker`; see
 [the container and Tailnet deployment doc](features/2026-08-16-container-and-tailnet-deployment.md)
-for the exact commands. This confirms, rather than changes, the read-only
-workspace / read-write data split already implied above.
+for the exact commands. `/workspace` was originally mounted read-only; as of
+the Phase 7 Git status feature (§4.2a) it is mounted read-write so
+`GitStatusService` can run `git fetch`/`git pull` against each application's
+`repositoryRoot`. This is a narrow, deliberate exception: only HomeBase's own
+Git status feature writes into `repoPath` locations, via plain `git`
+subprocess calls scoped to the standard `fetch`/`pull --ff-only` write paths.
+Hosted adapter code still may not write into `repoPath`/`adapterPath`, per the
+invariant below.
 
 Repository source and build output are distinct from mutable runtime data. Each
 hosted application receives an explicit application-scoped writable data path.
@@ -270,8 +275,9 @@ V1 reserves these HomeBase-owned API capabilities:
 
 Public responses must not expose repository paths, adapter paths, writable data
 paths, environment variables, stack traces, dependency credentials, or raw
-configuration. V1 provides no create, update, delete, reload, Git, build, or
-restart endpoint.
+configuration. V1 provides no create, update, delete, reload, build, or restart
+endpoint. It provides read-only Git status plus fetch/fast-forward-pull only,
+under the separate `/api/homebase` namespace documented in §4.2a.
 
 `GET /api/applications` reports the full seven-state lifecycle from §6, sourced
 live from `ApplicationHost.statusFor(id)` for every configured application (no
@@ -279,6 +285,38 @@ caching, no polling). `disabled` and `unavailable` derive directly from
 configuration and load outcome; `ready`/`degraded` are read live from each
 loaded adapter's `getStatus()`, bounded to 2000 ms per call so the endpoint
 stays bounded even with several applications.
+
+### 4.2a Git status API
+
+`/api/homebase` is a second HomeBase-owned namespace, independent of the
+`/api/applications` contract, the hosted adapter contract, and
+`ApplicationHost`. It shells out to the host's `git` CLI
+(`node:child_process.execFile`, arguments always passed as an array, never
+shell-interpolated) against each configured application's already-validated
+`repositoryRoot`, relying entirely on whatever git credential helper or SSH
+agent is already configured on the host — HomeBase performs no credential
+handling of its own.
+
+- `GET /api/homebase/applications/:id/git-status` — read-only. Returns
+  `branch`, `commit`, `workingTree` (`clean`/`dirty`/`unknown`), `upstream`
+  (e.g. `origin/main`, or `null` if none is configured), `ahead`/`behind`
+  counts relative to the checked-out branch's upstream tracking ref (`@{u}`,
+  not the registry's `defaultBranch`), `checkedAt`, and an optional `error`
+  (`not-a-git-repository`, `no-upstream`, `detached-head`, or
+  `git-not-installed`). 404 if `:id` is not a configured application.
+- `POST /api/homebase/applications/:id/git-status/fetch` — runs `git fetch`
+  and returns the recomputed status.
+- `POST /api/homebase/applications/:id/git-status/pull` — runs `git pull
+  --ff-only` and returns the recomputed status plus `pulled: boolean`. Refused
+  with `409` and `error: "dirty-tree"` without attempting the pull if the
+  working tree is not clean (re-checked at call time, not from a cached
+  value). No destructive or history-rewriting Git command is ever issued.
+
+Both mutating endpoints reject a second concurrent request for the same
+application with `409` while one is already in flight for that application id.
+All three responses set `Cache-Control: no-store`. Status computation is
+manual only: the dashboard loads it once per card and refreshes only on user
+action, never via background polling.
 
 ### 4.3 Shared browser origin
 
@@ -461,9 +499,10 @@ lifecycle records are not lost.
 mounted first in `src/app.ts`, lets `RootLogger` attach `requestId`
 automatically.
 
-V1 status is runtime truth, not a claim about Git checkout, build, or loaded
-revision. Checked-out, built, and loaded revision tracking belongs to a later
-Git-aware plan.
+V1 status is runtime truth, not a claim about build or loaded revision. Git
+checkout status (branch, clean/dirty, ahead/behind) is separately available,
+read-only plus safe fast-forward pull, via the `/api/homebase` API in §4.2a.
+Build and loaded-revision tracking still belongs to a later Git-aware plan.
 
 ## 8. Frontend experience
 
@@ -477,6 +516,11 @@ A separate integration phase replaces fixture data with the read-only
 configuration/status API. Application cards show display name, description,
 status, and direct route. Disabled and unavailable cards remain discoverable but
 must not present a working launch action.
+
+`ready`-state cards additionally show a Git status panel (branch, clean/dirty
+indicator, ahead/behind or "no upstream") with manual Refresh, Fetch, and Pull
+controls, per §4.2a. It loads lazily per card and never polls in the
+background; Pull is disabled while the tree is dirty or already up to date.
 
 Search, favorites, recent applications, categories as navigation, version
 details, update controls, and administrative editing are deferred unless a later

@@ -17,6 +17,10 @@ FROM node:24-slim AS dev
 WORKDIR /app
 ENV NODE_ENV=development
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
 RUN npm ci
 
@@ -29,6 +33,10 @@ CMD ["sh", "-c", "node scripts/installSiblingDeps.mjs && npx nodemon --legacy-wa
 FROM node:24-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force

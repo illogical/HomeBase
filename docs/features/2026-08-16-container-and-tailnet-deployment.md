@@ -24,6 +24,13 @@ compiler-generated `*.d.ts`), no `devDependencies` (`node_modules/vitest` is
 absent), no `.git` directory, and no baked-in `config/homebase.json`; `node -v`
 inside the image reports a Node 24.x runtime matching `engines.node`.
 
+As of the Phase 7 Git status dashboard feature, the `dev` and `runtime` stages
+also install the `git` CLI via `apt-get` (cleaned up in the same layer, per
+Debian slim-image practice) so `GitStatusService` can shell out to it inside
+the container. This is unrelated to the "no `.git` directory" point above,
+which refers to HomeBase's own repository metadata being excluded from the
+build context, not the `git` binary.
+
 ## 2. Configure
 
 Copy `.env.docker.example` to `.env.docker` (git-ignored) and fill in real
@@ -41,8 +48,14 @@ exist and be writable by UID 1000 (the runtime image's non-root `node` user)
 before the first run — `mkdir -p <path> && chown 1000:1000 <path>` is the
 simplest option on a Linux host; Docker Desktop on Windows/WSL2 remaps
 ownership transparently and needs no extra step (verified on this host).
-`HOMEBASE_HOST_WORKSPACE_PATH` only needs to be host-readable, since it is
-mounted read-only.
+`HOMEBASE_HOST_WORKSPACE_PATH` must be host-writable: as of the Phase 7 Git
+status dashboard feature it is mounted read-write, so `GitStatusService` can
+run `git fetch`/`git pull` against each application's checkout from inside
+the container (see `docs/SPECIFICATION.md` §2 and §4.2a). This assumes every
+configured repository is public — `fetch`/`pull` over anonymous HTTPS needs
+no credentials. Fetch/Pull will fail with a network/auth error inside the
+container for any private repository until separate credential wiring (SSH
+agent forwarding or a mounted git credential store) is added.
 
 ## 3. Run
 

@@ -1,6 +1,7 @@
 import { useRef, type MouseEvent } from "react";
 import type { ApplicationViewState, DashboardApplication, DashboardDataSource } from "./models";
 import { useApplications } from "./useApplications";
+import { GitStatusPanel } from "./GitStatusPanel";
 
 export interface AppProps {
   readonly dataSource: DashboardDataSource;
@@ -45,7 +46,12 @@ export function App({ dataSource }: AppProps) {
         </div>
       </header>
       <main id="applications" ref={mainRef} tabIndex={-1}>
-        <ApplicationCollection applications={applications} error={error} retry={retry} />
+        <ApplicationCollection
+          applications={applications}
+          error={error}
+          retry={retry}
+          dataSource={dataSource}
+        />
       </main>
     </>
   );
@@ -55,9 +61,10 @@ interface ApplicationCollectionProps {
   readonly applications: readonly DashboardApplication[] | null;
   readonly error: boolean;
   readonly retry: () => void;
+  readonly dataSource: DashboardDataSource;
 }
 
-function ApplicationCollection({ applications, error, retry }: ApplicationCollectionProps) {
+function ApplicationCollection({ applications, error, retry, dataSource }: ApplicationCollectionProps) {
   if (applications === null) {
     return <LoadingApplications />;
   }
@@ -90,7 +97,7 @@ function ApplicationCollection({ applications, error, retry }: ApplicationCollec
       <ul className="application-grid">
         {applications.map((application) => (
           <li key={application.id}>
-            <ApplicationCard application={application} />
+            <ApplicationCard application={application} dataSource={dataSource} />
           </li>
         ))}
       </ul>
@@ -98,7 +105,13 @@ function ApplicationCollection({ applications, error, retry }: ApplicationCollec
   );
 }
 
-function ApplicationCard({ application }: { readonly application: DashboardApplication }) {
+function ApplicationCard({
+  application,
+  dataSource,
+}: {
+  readonly application: DashboardApplication;
+  readonly dataSource: DashboardDataSource;
+}) {
   const monogram = application.displayName.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
   const isReady = application.state === "ready";
   return (
@@ -136,6 +149,11 @@ function ApplicationCard({ application }: { readonly application: DashboardAppli
           <code>{application.basePath}</code>
         )}
       </div>
+      {isReady ? (
+        <div className="card-git">
+          <GitStatusPanel applicationId={application.id} dataSource={dataSource} />
+        </div>
+      ) : null}
     </article>
   );
 }

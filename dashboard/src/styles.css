@@ -259,6 +259,130 @@ p {
   line-height: 1.4;
 }
 
+.card-git {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.git-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.git-panel-loading {
+  min-height: 30px;
+}
+
+.git-skeleton {
+  display: block;
+  width: 70%;
+  height: 14px;
+  border-radius: 6px;
+  background: var(--surface-raised);
+  animation: skeleton-pulse 1.4s ease-in-out infinite alternate;
+}
+
+.git-panel-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.git-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.82rem;
+}
+
+.git-tree-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.git-tree-clean { background: var(--ready); }
+.git-tree-dirty { background: var(--degraded); }
+.git-tree-unknown { background: var(--muted); }
+
+.git-branch {
+  overflow: hidden;
+  max-width: 40%;
+  color: var(--text);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-ahead-behind,
+.git-no-upstream {
+  display: inline-flex;
+  gap: 6px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.git-ahead {
+  color: var(--accent);
+}
+
+.git-behind {
+  color: var(--degraded);
+}
+
+.git-up-to-date {
+  color: var(--ready);
+}
+
+.git-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.git-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.git-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.git-actions button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.git-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.git-pull-button:not(:disabled) {
+  border-color: var(--ready);
+  color: var(--ready);
+}
+
 .empty-state {
   display: grid;
   justify-items: center;
