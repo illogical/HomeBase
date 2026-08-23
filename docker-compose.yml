@@ -22,6 +22,7 @@ services:
       - ${HOMEBASE_HOST_CONFIG_PATH}:/app/config/homebase.json:ro
       - ${HOMEBASE_HOST_DEVPLANNER_WORKSPACE_PATH}:/mnt/devplanner-workspace:rw
       - ${HOMEBASE_HOST_DEVPLANNER_VAULT_PATH}:/mnt/devplanner-vault:rw
+      - ${HOMEBASE_HOST_GIT_CREDENTIALS_PATH}:/run/secrets/git-credentials:ro
 
 volumes:
   devplanner-node-modules:

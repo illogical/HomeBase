@@ -29,6 +29,11 @@ pnpm-debug.log*
 /config/homebase.json
 /config/homebase.docker.json
 
+# Local git credential store mounted into the container (see README's Docker
+# credential setup section)
+git-credentials.docker
+!git-credentials.docker.example
+
 # Local runtime data and caches
 /.homebase/
 /data/

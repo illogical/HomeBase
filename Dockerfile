@@ -19,7 +19,11 @@ ENV NODE_ENV=development
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  && git config --system --add safe.directory /workspace \
+  && git config --system --add safe.directory /mnt/devplanner-vault \
+  && git config --system --add safe.directory /mnt/devplanner-workspace \
+  && git config --system credential.helper "store --file /run/secrets/git-credentials"
 
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -36,7 +40,11 @@ ENV NODE_ENV=production
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends git \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  && git config --system --add safe.directory /workspace \
+  && git config --system --add safe.directory /mnt/devplanner-vault \
+  && git config --system --add safe.directory /mnt/devplanner-workspace \
+  && git config --system credential.helper "store --file /run/secrets/git-credentials"
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force

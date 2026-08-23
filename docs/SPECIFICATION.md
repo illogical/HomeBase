@@ -293,9 +293,13 @@ stays bounded even with several applications.
 `ApplicationHost`. It shells out to the host's `git` CLI
 (`node:child_process.execFile`, arguments always passed as an array, never
 shell-interpolated) against each configured application's already-validated
-`repositoryRoot`, relying entirely on whatever git credential helper or SSH
-agent is already configured on the host — HomeBase performs no credential
-handling of its own.
+`repositoryRoot`. In the Docker deployment, the container's git is configured
+(via the Dockerfile, not application code) with `safe.directory` trust for the
+known bind-mount roots and a `credential.helper` pointing at an
+operator-supplied, read-only-mounted credential file
+(`HOMEBASE_HOST_GIT_CREDENTIALS_PATH`, documented in the README) for private
+remotes; HomeBase's own request-handling code still performs no credential
+handling of its own — see `docs/plans/2026-08-22-docker-git-credentials.md`.
 
 - `GET /api/homebase/applications/:id/git-status` — read-only. Returns
   `branch`, `commit`, `workingTree` (`clean`/`dirty`/`unknown`), `upstream`

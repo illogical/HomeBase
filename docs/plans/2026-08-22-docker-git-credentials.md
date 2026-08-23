@@ -1,9 +1,12 @@
 # Docker git credentials for private repositories
 
-**Status:** Deferred — not approved for implementation. This document exists
-so a future session has a concrete starting point; it still needs the open
-decisions below resolved and turned into a decision-complete plan (per
-`docs/TASKS.md`'s workflow) before any code changes.
+**Status:** Implemented (2026-08-23). The open decisions below were resolved
+(HTTPS/PAT, per-registry-wide credential file, read-only scope, `.env.docker`-style
+local file) and implemented as Option B, prompted by DevPlanner's Review & Compare
+feature failing against the private AgentVault repo in Docker. See
+`docs/TASKS.md`'s Phase 7 follow-up (2026-08-23) and the README's "Git status and
+credentials for private repositories" section for what was actually built — this
+document is kept for its historical context and rationale.
 
 ## Context
 

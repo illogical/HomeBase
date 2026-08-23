@@ -229,6 +229,46 @@ deployment mounts the host projects directory at `/workspace` and sets
 `HOMEBASE_WORKSPACE_PATH=/workspace` inside `docker-compose.yml`; it does not
 reuse a host-only absolute path inside the container.
 
+### Git status and credentials for private repositories
+
+Both `git config --system safe.directory` entries (for `/workspace`,
+`/mnt/devplanner-vault`, and `/mnt/devplanner-workspace`) and a `credential.helper`
+pointing at a mounted file are baked into the image via the `Dockerfile`, so bind
+mounts are trusted regardless of the host UID that owns them, and git looks for
+credentials at a fixed path with no secret baked into the image itself. Actually
+supplying a credential is only needed if one of those mounted directories is a
+private git repository (for example, DevPlanner's AgentVault vault, mounted at
+`/mnt/devplanner-vault`); public repositories need nothing further.
+
+To wire up credentials for a private repository:
+
+1. **Create a GitHub fine-grained personal access token** at
+   [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens),
+   scoped to only the specific repositories that need to be read (for example, just
+   `illogical/AgentVault`), with repository permission **Contents: Read-only** and
+   nothing else (`Metadata: Read-only` is auto-required by GitHub and harmless). Do
+   not use a classic token or grant broader scope than that — neither DevPlanner's
+   vault git integration (`status`/`diff`/stage/local `commit`/`show`, never a
+   network operation) nor SourceManager's update flow (`fetch`/`checkout`/`pull`,
+   never `push`) writes to any remote repository today. If push support is ever
+   added to one of those apps, regenerate the token with `Read and write` at that
+   point — not before.
+2. **Copy `git-credentials.docker.example` to `git-credentials.docker`** (git-ignored,
+   same pattern as `.env.docker`) and replace the placeholder with the token in
+   `https://x-access-token:<token>@github.com` format.
+3. **Set `HOMEBASE_HOST_GIT_CREDENTIALS_PATH`** in `.env.docker` to the absolute host
+   path of that file. If no private repositories are configured, point it at any
+   existing empty file instead — the compose files require the variable to be set
+   either way.
+4. Rebuild/recreate the container as usual; the file is bind-mounted read-only at
+   `/run/secrets/git-credentials`, never passed as an environment variable, so it
+   never appears in `docker inspect` output or process environment dumps.
+
+To rotate or revoke the token, replace the token in `git-credentials.docker` and
+restart the container (or revoke it directly from GitHub's fine-grained PAT
+settings) — no image rebuild is needed, since the file is read fresh by git's
+credential-store helper on each git invocation rather than cached.
+
 ### Docker development mode
 
 A second, dev-only image and Compose file give the same edit-and-see-it-update

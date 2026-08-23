@@ -260,6 +260,25 @@ container/Tailnet deployment doc for the updated contract; this assumes
 public repositories only (no credential wiring was added for private
 remotes).
 
+**Follow-up (2026-08-23):** DevPlanner's Review & Compare feature (a separate,
+DevPlanner-side git integration against its mounted vault, not this
+`GitStatusService`) reported every AgentVault file as untracked in Docker.
+Root cause was git's dubious-ownership protection rejecting the bind-mounted
+vault (host UID 501 vs. the container's UID 1000 `node` user), not missing
+credentials — DevPlanner's vault git operations are local-only and never
+needed authentication. Fixed by baking `safe.directory` entries for
+`/workspace`, `/mnt/devplanner-vault`, and `/mnt/devplanner-workspace` into
+the image (both Dockerfile stages). Separately, and to close the
+previously-deferred credential gap noted above before it causes a second
+failure, added scoped HTTPS credential wiring: a mounted git-credential-store
+file (`HOMEBASE_HOST_GIT_CREDENTIALS_PATH` → `/run/secrets/git-credentials`,
+read-only) and a `credential.helper` pointing at it, so a private repository's
+`fetch`/`pull` (via this `GitStatusService`, if one is ever added to the
+registry) now authenticates instead of failing closed. See
+`docs/plans/2026-08-22-docker-git-credentials.md` (now implemented) and the
+README's "Git status and credentials for private repositories" section for
+setup steps.
+
 ## Phase 8: Deferred capabilities
 
 **Status:** Not started  
