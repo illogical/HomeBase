@@ -316,6 +316,35 @@ a Windows-host bind mount are not forwarded reliably through Docker Desktop.
 This is scoped to the Docker dev container only; local, non-Docker `npm run
 dev` is unaffected and keeps using native file-watch events.
 
+### Rebuilding hosted sibling applications
+
+Hot reload above only covers HomeBase's own `src/**` and `dashboard/src/**`.
+Hosted applications (DevPlanner, LMApi, MemoryApi, LMEval) are loaded once at
+startup as **compiled** adapters (`dist/host/index.js`, per `adapterPath` in
+`config/homebase.json`) — `ApplicationHost.loadAll()` never watches a
+sibling's `dist/` output, so editing a sibling repo's source has no visible
+effect until that sibling is rebuilt and HomeBase restarts. Coordinated
+cross-repository hot reload is intentionally out of scope for v1 (see
+"Deferred beyond v1" below); `npm run rebuild:dev` is the interim workaround:
+
+```sh
+npm run rebuild:dev
+```
+
+For every **enabled** application in `config/homebase.json`, this installs
+dependencies (`npm install --no-package-lock`, matching `installSiblingDeps.mjs`)
+and runs `npm run build` in that application's directory under
+`HOMEBASE_WORKSPACE_PATH`, then restarts the `homebase-dev` container so the
+freshly built adapters are re-imported. Pass `--app <id>` to rebuild a single
+application (for example `npm run rebuild:dev -- --app devplanner`), or
+`--no-restart` to rebuild without restarting. If the dev container isn't
+running, the restart step warns instead of failing — the sibling is still
+rebuilt on disk.
+
+`npm run rebuild:prod` runs the same install-and-build pass with `npm ci`
+instead of `npm install` (a clean, lockfile-reproducible install, matching
+what a production deployment expects) and never restarts a container.
+
 ## Initial technology baseline
 
 - Node.js 24

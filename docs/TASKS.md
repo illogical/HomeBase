@@ -131,7 +131,7 @@ work begins, per this file's workflow.
 
 ## Phase 5: Candidate application integrations
 
-**Status:** Not started  
+**Status:** In progress  
 **Plan:** separate plan required for each repository
 
 Each update below must inspect that repository's current implementation and local
@@ -159,8 +159,17 @@ before any repository changes:
   (external repository; hosted adapter and base-path migration implemented
   and verified live against a real running HomeBase process — adapter loads
   in the shared host process, and routes/API calls were confirmed working).
-- [ ] MemoryApi adapter and base-path migration — **Not started** — Plan: pending
-- [ ] LMEval adapter and base-path migration — **Not started** — Plan: pending
+- [x] MemoryApi adapter and base-path migration — **Done** — Plan:
+  [MemoryApi HomeBase integration plan](file:///C:/LocalDev/Projects/MemoryApi/docs/plans/homebase-integration-plan.md)
+  (external repository; hosted adapter and base-path migration implemented
+  and verified live against a real running HomeBase process).
+- [ ] LMEval adapter and base-path migration — **Not started** — Plan:
+  [LMEval HomeBase integration handoff plan](file:///C:/LocalDev/Projects/LMEval/docs/plans/2026-08-23-homebase-integration.md)
+  (external repository; plan only — implementation not yet started. Notably
+  LMEval is the only candidate on Hono rather than Express, so the plan's
+  primary decision is porting its 8 route modules to an Express `Router`
+  before any base-path work; it is also on bun today but uses no bun-only
+  API, so migrating its scripts to npm/Node tooling is straightforward.)
 
 - [ ] **Acceptance gate:** All four compiled adapters can run in the same HomeBase
   process and shared server, pass the shared integration matrix, dispose their
