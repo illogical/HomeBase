@@ -1,5 +1,6 @@
 import { createServer as createHttpServer, type Server } from "node:http";
 import type { Express } from "express";
+import { Server as SocketIOServer } from "socket.io";
 import { createApp } from "./app.js";
 import {
   initializeDashboard,
@@ -50,8 +51,10 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
   const loadApplicationHost = options.loadApplicationHost ?? ApplicationHost.loadAll;
   const applicationHost = await loadApplicationHost(configService, rootLogger);
 
-  const app = createApp(configService, applicationHost);
+  const { app, scriptRunnerService } = createApp(configService, applicationHost);
   const server = (options.createServer ?? createHttpServer)(app);
+  const io = new SocketIOServer(server, { path: "/homebase/socket.io" });
+  scriptRunnerService.attachNamespace(io.of("/homebase/scripts"));
   await applicationHost.attachRealtime(server);
 
   const mode = options.mode ?? "production";

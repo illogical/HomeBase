@@ -11,7 +11,7 @@ services:
       HOMEBASE_WORKSPACE_PATH: /workspace
       HOMEBASE_DATA_PATH: /data
     ports:
-      - "127.0.0.1:${HOMEBASE_PORT:-17106}:${HOMEBASE_PORT:-17106}"
+      - "0.0.0.0:${HOMEBASE_PORT:-17106}:${HOMEBASE_PORT:-17106}"
     volumes:
       - ${HOMEBASE_HOST_WORKSPACE_PATH}:/workspace:rw
       - devplanner-node-modules:/workspace/DevPlanner/node_modules

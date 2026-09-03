@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { GitStatusPanel } from "./GitStatusPanel";
 import { GitOperationConflictError } from "./httpDataSource";
-import type { DashboardDataSource, GitMutationResult, GitStatus } from "./models";
+import type { DashboardDataSource, GitMutationResult, GitStatus, RunState, ScriptsResult } from "./models";
 
 function baseStatus(overrides: Partial<GitStatus> = {}): GitStatus {
   return {
@@ -26,6 +26,12 @@ function stubDataSource(overrides: Partial<DashboardDataSource> = {}): Dashboard
     getGitStatus: vi.fn(async () => baseStatus()),
     fetchGit: vi.fn(async () => baseStatus()),
     pullGit: vi.fn(async () => ({ ...baseStatus(), pulled: true }) satisfies GitMutationResult),
+    listScripts: vi.fn(async () => ({ scripts: {}, checkedAt: new Date().toISOString() }) satisfies ScriptsResult),
+    runScript: vi.fn(async () => new Promise<{ runId: string; startedAt: string }>(() => undefined)),
+    stopScript: vi.fn(async () => undefined),
+    getCurrentRun: vi.fn(async () => null as RunState | null),
+    getRunReplay: vi.fn(async () => new Promise<RunState>(() => undefined)),
+    subscribeToRunOutput: vi.fn(() => () => undefined),
     ...overrides,
   };
 }

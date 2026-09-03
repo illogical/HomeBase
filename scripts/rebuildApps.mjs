@@ -53,11 +53,64 @@ for (const application of targets) {
     continue;
   }
 
-  console.log(`[rebuildApps] npm run build for ${application.id} (${appPath})`);
-  const build = spawnSync("npm", ["run", "build"], { cwd: appPath, stdio: "inherit", shell: true });
-  if (build.status !== 0) {
-    console.error(`[rebuildApps] npm run build failed for ${application.id}`);
+  const appPackage = JSON.parse(readFileSync(join(appPath, "package.json"), "utf-8"));
+  const appScripts = appPackage.scripts ?? {};
+
+  // Sibling repos split "build" into a frontend/general build and a
+  // separate `build:host`, which compiles the actual adapter HomeBase loads
+  // (adapterPath, e.g. dist/host/index.js) — plain `build` alone does not
+  // produce it. Some apps (e.g. DevPlanner) also need `build:hosted` instead
+  // of `build` so built asset URLs are prefixed for their HomeBase basePath
+  // rather than assuming they're served from `/`.
+  const generalBuildScript = appScripts["build:hosted"]
+    ? "build:hosted"
+    : appScripts["build"]
+      ? "build"
+      : undefined;
+
+  let buildFailed = false;
+  let builtSomething = false;
+
+  if (generalBuildScript) {
+    console.log(`[rebuildApps] npm run ${generalBuildScript} for ${application.id} (${appPath})`);
+    const build = spawnSync("npm", ["run", generalBuildScript], {
+      cwd: appPath,
+      stdio: "inherit",
+      shell: true,
+    });
+    if (build.status !== 0) {
+      console.error(`[rebuildApps] npm run ${generalBuildScript} failed for ${application.id}`);
+      buildFailed = true;
+    } else {
+      builtSomething = true;
+    }
+  } else {
+    console.warn(`[rebuildApps] ${application.id} defines neither "build:hosted" nor "build"; skipping.`);
+  }
+
+  if (!buildFailed && appScripts["build:host"]) {
+    console.log(`[rebuildApps] npm run build:host for ${application.id} (${appPath})`);
+    const buildHost = spawnSync("npm", ["run", "build:host"], {
+      cwd: appPath,
+      stdio: "inherit",
+      shell: true,
+    });
+    if (buildHost.status !== 0) {
+      console.error(`[rebuildApps] npm run build:host failed for ${application.id}`);
+      buildFailed = true;
+    } else {
+      builtSomething = true;
+    }
+  } else if (!buildFailed) {
+    console.warn(`[rebuildApps] ${application.id} defines no "build:host" script; its hosted adapter was not rebuilt.`);
+  }
+
+  if (buildFailed) {
     results.push({ id: application.id, ok: false, reason: "build" });
+    continue;
+  }
+  if (!builtSomething) {
+    results.push({ id: application.id, ok: false, reason: "nothing-to-build" });
     continue;
   }
 

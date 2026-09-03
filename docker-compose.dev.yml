@@ -16,7 +16,7 @@ services:
       # (non-Docker) `npm run dev` is unaffected by this.
       CHOKIDAR_USEPOLLING: "true"
     ports:
-      - "127.0.0.1:${HOMEBASE_PORT:-17106}:${HOMEBASE_PORT:-17106}"
+      - "0.0.0.0:${HOMEBASE_PORT:-17106}:${HOMEBASE_PORT:-17106}"
     volumes:
       - .:/app
       - homebase-dev-node-modules:/app/node_modules

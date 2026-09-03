@@ -29,7 +29,7 @@ async function initRepoWithCommit(dir: string): Promise<void> {
 
 async function buildApp(
   fixture: Awaited<ReturnType<typeof createConfigFixture>>,
-): Promise<ReturnType<typeof createApp>> {
+): Promise<ReturnType<typeof createApp>["app"]> {
   const configService = await ConfigService.load({
     projectRoot: fixture.projectRoot,
     environment: {
@@ -39,7 +39,7 @@ async function buildApp(
     nodeVersion: "24.0.0",
   });
   const applicationHost = await ApplicationHost.loadAll(configService, createTestLogger());
-  return createApp(configService, applicationHost);
+  return createApp(configService, applicationHost).app;
 }
 
 describe("/api/homebase git status routes", () => {

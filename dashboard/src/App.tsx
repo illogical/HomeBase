@@ -1,7 +1,8 @@
-import { useRef, type MouseEvent } from "react";
+import { useRef, useState, type MouseEvent } from "react";
 import type { ApplicationViewState, DashboardApplication, DashboardDataSource } from "./models";
 import { useApplications } from "./useApplications";
 import { GitStatusPanel } from "./GitStatusPanel";
+import { ScriptRunnerCardBack } from "./ScriptRunnerCardBack";
 
 export interface AppProps {
   readonly dataSource: DashboardDataSource;
@@ -16,6 +17,45 @@ const stateLabels: Readonly<Record<ApplicationViewState, string>> = {
   unavailable: "Unavailable",
   stopping: "Stopping",
 };
+
+function ScriptsIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <polyline points="4 17 10 11 4 5" />
+      <line x1="12" y1="19" x2="20" y2="19" />
+    </svg>
+  );
+}
+
+function FlipBackIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <polyline points="15 18 9 12 15 6" />
+    </svg>
+  );
+}
 
 export function App({ dataSource }: AppProps) {
   const mainRef = useRef<HTMLElement>(null);
@@ -114,47 +154,103 @@ function ApplicationCard({
 }) {
   const monogram = application.displayName.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
   const isReady = application.state === "ready";
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [hasBeenFlipped, setHasBeenFlipped] = useState(false);
+
+  const flip = (): void => {
+    setIsFlipped((flipped) => !flipped);
+    setHasBeenFlipped(true);
+  };
+
+  const handleCardClick = (event: MouseEvent<HTMLElement>): void => {
+    if (!isReady) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("a, button, input")) return;
+    flip();
+  };
+
   return (
-    <article className={`application-card state-${application.state}`}>
-      <div className="card-heading">
-        {isReady ? (
-          <a href={application.basePath} rel="noopener noreferrer">
-            <div className="app-monogram" aria-hidden="true">{monogram}</div>
-          </a>
-        ) : (
-          <div className="app-monogram" aria-hidden="true">{monogram}</div>
-        )}
-        <span className="status-badge">
-          <span className="status-dot" aria-hidden="true" />
-          {stateLabels[application.state]}
-        </span>
-      </div>
-      <div className="card-copy">
-        {isReady ? (
-          <a href={application.basePath} rel="noopener noreferrer">
-            <h3>{application.displayName}</h3>
-          </a>
-        ) : (
-          <h3>{application.displayName}</h3>
-        )}
-        <p className="description">{application.description}</p>
-      </div>
-      <div className="card-status">
-        {application.state !== "ready" ? <p>{application.statusSummary}</p> : null}
-        {isReady ? (
-          <a href={application.basePath} rel="noopener noreferrer">
-            <code>{application.basePath}</code>
-          </a>
-        ) : (
-          <code>{application.basePath}</code>
-        )}
-      </div>
-      {isReady ? (
-        <div className="card-git">
-          <GitStatusPanel applicationId={application.id} dataSource={dataSource} />
+    <div className={`card-flip-container${isReady ? " is-flippable" : ""}`}>
+      <article
+        className={`application-card card-flip-inner state-${application.state}${isFlipped ? " is-flipped" : ""}`}
+        onClick={isReady ? handleCardClick : undefined}
+      >
+        <div className="card-face card-front">
+          <div className="card-heading">
+            {isReady ? (
+              <a href={application.basePath} rel="noopener noreferrer">
+                <div className="app-monogram" aria-hidden="true">{monogram}</div>
+              </a>
+            ) : (
+              <div className="app-monogram" aria-hidden="true">{monogram}</div>
+            )}
+            <div className="card-heading-end">
+              <span className="status-badge">
+                <span className="status-dot" aria-hidden="true" />
+                {stateLabels[application.state]}
+              </span>
+              {isReady ? (
+                <button
+                  type="button"
+                  className="card-flip-button"
+                  onClick={flip}
+                  aria-label={`Show run scripts for ${application.displayName}`}
+                  title="Run scripts"
+                >
+                  <ScriptsIcon />
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <div className="card-copy">
+            {isReady ? (
+              <a href={application.basePath} rel="noopener noreferrer">
+                <h3>{application.displayName}</h3>
+              </a>
+            ) : (
+              <h3>{application.displayName}</h3>
+            )}
+            <p className="description">{application.description}</p>
+          </div>
+          <div className="card-status">
+            {application.state !== "ready" ? <p>{application.statusSummary}</p> : null}
+            {isReady ? (
+              <a href={application.basePath} rel="noopener noreferrer">
+                <code>{application.basePath}</code>
+              </a>
+            ) : (
+              <code>{application.basePath}</code>
+            )}
+          </div>
+          {isReady ? (
+            <div className="card-git">
+              <GitStatusPanel applicationId={application.id} dataSource={dataSource} />
+            </div>
+          ) : null}
         </div>
-      ) : null}
-    </article>
+        {isReady ? (
+          <div className="card-face card-back">
+            <div className="card-back-heading">
+              <span className="card-back-hint">Scripts · {application.displayName}</span>
+              <button
+                type="button"
+                className="card-flip-button"
+                onClick={flip}
+                aria-label={`Back to ${application.displayName} card`}
+                title="Back"
+              >
+                <FlipBackIcon />
+              </button>
+            </div>
+            <div className="card-back-body">
+              {hasBeenFlipped ? (
+                <ScriptRunnerCardBack applicationId={application.id} dataSource={dataSource} />
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </article>
+    </div>
   );
 }
 

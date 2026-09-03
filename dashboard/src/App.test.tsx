@@ -6,7 +6,15 @@ import axe from "axe-core";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { FixtureDashboardDataSource } from "./fixtures";
-import type { DashboardApplication, DashboardDataSource, GitMutationResult, GitStatus } from "./models";
+import type {
+  DashboardApplication,
+  DashboardDataSource,
+  GitMutationResult,
+  GitStatus,
+  RunStarted,
+  RunState,
+  ScriptsResult,
+} from "./models";
 
 function neverGitStatus(): Promise<GitStatus> {
   return new Promise<GitStatus>(() => undefined);
@@ -15,6 +23,42 @@ function neverGitStatus(): Promise<GitStatus> {
 function neverGitMutation(): Promise<GitMutationResult> {
   return new Promise<GitMutationResult>(() => undefined);
 }
+
+function neverScripts(): Promise<ScriptsResult> {
+  return new Promise<ScriptsResult>(() => undefined);
+}
+
+function neverRunStarted(): Promise<RunStarted> {
+  return new Promise<RunStarted>(() => undefined);
+}
+
+function neverVoid(): Promise<void> {
+  return new Promise<void>(() => undefined);
+}
+
+function neverCurrentRun(): Promise<RunState | null> {
+  return new Promise<RunState | null>(() => undefined);
+}
+
+function neverRunReplay(): Promise<RunState> {
+  return new Promise<RunState>(() => undefined);
+}
+
+function noopSubscribeToRunOutput(): () => void {
+  return () => undefined;
+}
+
+const scriptStubs = {
+  listScripts: neverScripts,
+  runScript: neverRunStarted,
+  stopScript: neverVoid,
+  getCurrentRun: neverCurrentRun,
+  getRunReplay: neverRunReplay,
+  subscribeToRunOutput: noopSubscribeToRunOutput,
+} satisfies Pick<
+  DashboardDataSource,
+  "listScripts" | "runScript" | "stopScript" | "getCurrentRun" | "getRunReplay" | "subscribeToRunOutput"
+>;
 
 describe("dashboard application", () => {
   it("renders the semantic mixed fixture without launch controls", async () => {
@@ -76,6 +120,7 @@ describe("dashboard application", () => {
       getGitStatus: neverGitStatus,
       fetchGit: neverGitStatus,
       pullGit: neverGitMutation,
+      ...scriptStubs,
     };
     const { unmount } = render(<App dataSource={dataSource} />);
 
@@ -116,6 +161,7 @@ describe("dashboard application", () => {
       getGitStatus: neverGitStatus,
       fetchGit: neverGitStatus,
       pullGit: neverGitMutation,
+      ...scriptStubs,
     };
     const { container } = render(<App dataSource={dataSource} />);
     await screen.findByRole("button", { name: "Retry loading applications" });
@@ -135,6 +181,7 @@ describe("dashboard application", () => {
       getGitStatus: neverGitStatus,
       fetchGit: neverGitStatus,
       pullGit: neverGitMutation,
+      ...scriptStubs,
     };
     const user = userEvent.setup();
     render(<App dataSource={dataSource} />);

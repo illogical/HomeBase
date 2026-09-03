@@ -333,11 +333,23 @@ npm run rebuild:dev
 
 For every **enabled** application in `config/homebase.json`, this installs
 dependencies (`npm install --no-package-lock`, matching `installSiblingDeps.mjs`)
-and runs `npm run build` in that application's directory under
-`HOMEBASE_WORKSPACE_PATH`, then restarts the `homebase-dev` container so the
-freshly built adapters are re-imported. Pass `--app <id>` to rebuild a single
-application (for example `npm run rebuild:dev -- --app devplanner`), or
-`--no-restart` to rebuild without restarting. If the dev container isn't
+in that application's directory under `HOMEBASE_WORKSPACE_PATH`, then runs up
+to two build scripts read from that app's own `package.json` — plain `build`
+alone is not enough, since sibling repos split it:
+
+- A frontend/general build: `build:hosted` if the app defines it (some apps,
+  like DevPlanner, need this variant so built asset URLs are prefixed for
+  their HomeBase `basePath` instead of assuming they're served from `/`),
+  otherwise plain `build`.
+- `build:host`, if defined — this is what actually compiles the hosted
+  adapter HomeBase loads (`adapterPath`, e.g. `dist/host/index.js`; plain
+  `build` does not produce it).
+
+Both are run when present; an app missing both is skipped with a warning
+(nothing to rebuild). Afterward the `homebase-dev` container is restarted so
+the freshly built adapters are re-imported. Pass `--app <id>` to rebuild a
+single application (for example `npm run rebuild:dev -- --app devplanner`),
+or `--no-restart` to rebuild without restarting. If the dev container isn't
 running, the restart step warns instead of failing — the sibling is still
 rebuilt on disk.
 

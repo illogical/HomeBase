@@ -322,6 +322,60 @@ All three responses set `Cache-Control: no-store`. Status computation is
 manual only: the dashboard loads it once per card and refreshes only on user
 action, never via background polling.
 
+### 4.2b Package script run API
+
+Also under `/api/homebase`, independent of the Git status API and the hosted
+adapter contract. It lets the dashboard list an application's declared
+`package.json` scripts and run one, streaming its output live and stopping it
+again, without HomeBase requiring a terminal.
+
+`PackageScriptsService` reads `<repositoryRoot>/package.json` with plain
+`fs.readFile`/`JSON.parse` (no shell exec) and returns its `scripts` map, or a
+structured `error` (`no-package-json`, `invalid-package-json`, `read-error`)
+instead of a 500. `ScriptRunnerService` owns process lifecycle: one concurrent
+run per application, `child_process.spawn(<packageManager> run <scriptName>,
+{ cwd: repositoryRoot, detached: true })` so the child is its own POSIX
+process group, and the script name is re-validated against a live read of
+`package.json` on every run request rather than trusting a client-supplied
+list. Stop sends `SIGTERM` to the negated PID (the process group), escalating
+to `SIGKILL` after a 5-second grace period if the group is still alive. Each
+run keeps a capped (2000-entry) in-memory ring buffer of output chunks for
+replay after a reconnect; run bookkeeping is in-memory only and is lost on a
+HomeBase restart. This process-group kill path assumes the POSIX runtime
+HomeBase is deployed under (§2.1); it is not adapted for a native Windows
+host.
+
+- `GET /api/homebase/applications/:id/scripts` — lists the `scripts` map (or
+  a structured `error`) for the configured application. 404 if `:id` is not
+  configured.
+- `POST /api/homebase/applications/:id/scripts/:name/run` — starts a run and
+  returns `{ runId, startedAt }`. `404 { error: "unknown-script" }` if `:name`
+  is not declared in `package.json`. `409 { error: "operation-in-progress",
+  runId }` carrying the already-running run's id if one is already active for
+  this application, rather than queuing or running scripts in parallel.
+- `POST /api/homebase/applications/:id/scripts/run/:runId/stop` — requests
+  termination; idempotent `200` if the run has already reached a terminal
+  state. 404 if `:runId` is unknown or belongs to a different application.
+- `GET /api/homebase/applications/:id/scripts/run/current` — the application's
+  most recent tracked run (running or terminal), or `404 { error:
+  "no-active-run" }` if none has run since the last HomeBase restart. Lets a
+  freshly loaded or re-flipped dashboard card reattach without having
+  remembered a `runId`.
+- `GET /api/homebase/applications/:id/scripts/run/:runId` — full run status
+  plus buffered output, for replay and reconnect gap-filling. 404 if
+  `:runId` is unknown or belongs to a different application.
+
+All responses set `Cache-Control: no-store`. Live output streams over
+Socket.IO on a HomeBase-owned path (`/homebase/socket.io`, distinct from any
+hosted adapter's own `attachRealtime` upgrade path per §5) and namespace
+(`/homebase/scripts`), one room per `runId` (`run:<runId>`), joined and left
+via `join-run`/`leave-run` client events. The server emits `output` events
+(`{ runId, seq, stream, data, timestamp }`) and a terminal `status` event
+carrying the full run snapshot. A socket disconnecting (tab closed, refresh,
+brief network blip) never stops the underlying process — a `dev`-style script
+survives a page refresh — and `seq` lets a reconnecting client detect gaps and
+fall back to the REST replay endpoints above.
+
 ### 4.3 Shared browser origin
 
 All hosted applications share one browser origin. Each application must namespace
@@ -525,6 +579,20 @@ must not present a working launch action.
 indicator, ahead/behind or "no upstream") with manual Refresh, Fetch, and Pull
 controls, per §4.2a. It loads lazily per card and never polls in the
 background; Pull is disabled while the tree is dirty or already up to date.
+
+`ready`-state cards can also be flipped, via a dedicated "Run scripts" control
+in the card heading or a click on the card's background outside its links and
+buttons, to reveal the application's declared `package.json` scripts (§4.2b).
+The scripts list loads lazily on first flip only, so an unflipped card issues
+no extra requests. Selecting a script replaces the list, in place on the same
+card face, with a live scrollable output panel and a Stop control for
+long-running scripts (`dev`/`start`/`watch`); the panel reattaches to an
+already-running script — after flipping away and back, or after a full page
+reload — via the run-current/replay endpoints rather than resetting. Starting
+a script while one is already running for that card reattaches to the
+existing run instead of erroring. Flipping a card, or navigating from its
+output panel back to its script list, never stops a script that is still
+running.
 
 Search, favorites, recent applications, categories as navigation, version
 details, update controls, and administrative editing are deferred unless a later

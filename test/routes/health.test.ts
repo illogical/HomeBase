@@ -20,7 +20,7 @@ describe("liveness and readiness", () => {
         nodeVersion: "24.0.0",
       });
       const applicationHost = await ApplicationHost.loadAll(configService, createTestLogger());
-      const app = createApp(configService, applicationHost);
+      const { app } = createApp(configService, applicationHost);
 
       const health = await request(app).get("/health");
       expect(health.status).toBe(200);

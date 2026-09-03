@@ -28,7 +28,7 @@ describe("server composition", () => {
       await fixture.writeRegistry(validRegistry());
       const configService = await loadRealConfigService(fixture);
       const applicationHost = await ApplicationHost.loadAll(configService, createTestLogger());
-      const app = createApp(configService, applicationHost);
+      const { app } = createApp(configService, applicationHost);
       expect(app.locals.configService).toBe(configService);
     } finally {
       await fixture.cleanup();

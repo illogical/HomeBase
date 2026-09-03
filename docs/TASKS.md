@@ -163,18 +163,27 @@ before any repository changes:
   [MemoryApi HomeBase integration plan](file:///C:/LocalDev/Projects/MemoryApi/docs/plans/homebase-integration-plan.md)
   (external repository; hosted adapter and base-path migration implemented
   and verified live against a real running HomeBase process).
-- [ ] LMEval adapter and base-path migration — **Not started** — Plan:
+- [x] LMEval adapter and base-path migration — **Done** — Plan:
   [LMEval HomeBase integration handoff plan](file:///C:/LocalDev/Projects/LMEval/docs/plans/2026-08-23-homebase-integration.md)
-  (external repository; plan only — implementation not yet started. Notably
-  LMEval is the only candidate on Hono rather than Express, so the plan's
-  primary decision is porting its 8 route modules to an Express `Router`
-  before any base-path work; it is also on bun today but uses no bun-only
-  API, so migrating its scripts to npm/Node tooling is straightforward.)
+  (external repository; hosted adapter and base-path migration implemented
+  and verified live against a real running HomeBase process:
+  `config/homebase.json`'s `lmeval.enabled` flipped to `true`; dashboard
+  reports `lmeval` and `lmapi` both `ready`; `/lmeval/` frontend, `/api/eval/*`
+  routes, and `/lmeval/ws/eval` WebSocket namespace all confirmed reachable;
+  a live call through LMEval's `/lmeval/api/eval/models` returned LMApi's full
+  live model list, confirming the loopback URL
+  (`http://127.0.0.1:17106/lmapi`, derived from `HOMEBASE_PORT` at
+  `initialize()` time — not the standalone `LMAPI_BASE_URL=…:17110` env var,
+  which only applies outside hosted mode) is correct; shutdown was clean with
+  no dangling errors).
 
 - [ ] **Acceptance gate:** All four compiled adapters can run in the same HomeBase
   process and shared server, pass the shared integration matrix, dispose their
   resources, remain independently runnable, and report failures without hiding
-  the truth about healthy applications.
+  the truth about healthy applications. (Not yet met: DevPlanner's adapter
+  currently fails to initialize and MemoryApi reports degraded — vector/graph
+  backends (Qdrant/Neo4j) unreachable in this environment. Both are pre-existing,
+  unrelated to LMEval's integration.)
 
 ## Phase 6: Container and Tailnet rollout
 

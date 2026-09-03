@@ -19,7 +19,7 @@ async function enableFirstApp(fixture: Awaited<ReturnType<typeof createConfigFix
 async function buildApp(
   fixture: Awaited<ReturnType<typeof createConfigFixture>>,
   workspaceRoot: string = fixture.workspaceRoot,
-): Promise<ReturnType<typeof createApp>> {
+): Promise<ReturnType<typeof createApp>["app"]> {
   const configService = await ConfigService.load({
     projectRoot: fixture.projectRoot,
     environment: {
@@ -29,7 +29,7 @@ async function buildApp(
     nodeVersion: "24.0.0",
   });
   const applicationHost = await ApplicationHost.loadAll(configService, createTestLogger());
-  return createApp(configService, applicationHost);
+  return createApp(configService, applicationHost).app;
 }
 
 describe("GET /api/applications", () => {
