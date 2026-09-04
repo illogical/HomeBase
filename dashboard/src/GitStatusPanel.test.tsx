@@ -23,6 +23,7 @@ function baseStatus(overrides: Partial<GitStatus> = {}): GitStatus {
 function stubDataSource(overrides: Partial<DashboardDataSource> = {}): DashboardDataSource {
   return {
     listApplications: vi.fn(async () => []),
+    retryApplication: vi.fn(async () => undefined),
     getGitStatus: vi.fn(async () => baseStatus()),
     fetchGit: vi.fn(async () => baseStatus()),
     pullGit: vi.fn(async () => ({ ...baseStatus(), pulled: true }) satisfies GitMutationResult),

@@ -5,7 +5,7 @@ import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import type { RegistryApplication } from "../../src/config/models.js";
-import { ApplicationHost } from "../../src/services/ApplicationHost.js";
+import { ApplicationHost, type ApplicationHostOptions } from "../../src/services/ApplicationHost.js";
 import { ConfigService } from "../../src/services/ConfigService.js";
 import { createConfigFixture, type ConfigFixture } from "../support/configFixture.js";
 import {
@@ -27,9 +27,10 @@ async function buildFixture(): Promise<ConfigFixture> {
   return fixture;
 }
 
-async function loadHost(
+async function loadHostRaw(
   fixture: ConfigFixture,
   entries: Array<{ id: string; adapter: FixtureAdapterName; overrides?: Partial<RegistryApplication> }>,
+  installDependencies: ApplicationHostOptions["installDependencies"] = async () => {},
 ): Promise<{ host: ApplicationHost; logger: ReturnType<typeof createTestLogger> }> {
   const applications: RegistryApplication[] = entries.map((entry) =>
     fixtureApplication(entry.id, entry.adapter, entry.overrides),
@@ -44,7 +45,16 @@ async function loadHost(
     nodeVersion: "24.0.0",
   });
   const logger = createTestLogger();
-  const host = await ApplicationHost.loadAll(configService, logger);
+  const host = await ApplicationHost.loadAll(configService, logger, { installDependencies });
+  return { host, logger };
+}
+
+async function loadHost(
+  fixture: ConfigFixture,
+  entries: Array<{ id: string; adapter: FixtureAdapterName; overrides?: Partial<RegistryApplication> }>,
+): Promise<{ host: ApplicationHost; logger: ReturnType<typeof createTestLogger> }> {
+  const { host, logger } = await loadHostRaw(fixture, entries);
+  await host.settled();
   return { host, logger };
 }
 
@@ -260,6 +270,112 @@ describe("ApplicationHost status honesty", () => {
 
     const healthy = await host.statusFor("routes-app");
     expect(healthy.state).toBe("ready");
+  });
+});
+
+describe("ApplicationHost non-blocking loading", () => {
+  it("resolves without waiting on a still-initializing sibling, then settles to ready once released", async () => {
+    const fixture = await buildFixture();
+    const { resetGate, releaseInitialize } = await import("../fixtures/adapters/slow-initialize/index.js");
+    resetGate();
+
+    const { host } = await loadHostRaw(fixture, [{ id: "slow-app", adapter: "slow-initialize" }]);
+
+    const duringLoad = await host.statusFor("slow-app");
+    expect(["loading", "initializing"]).toContain(duringLoad.state);
+
+    releaseInitialize();
+    await host.settled();
+
+    const afterLoad = await host.statusFor("slow-app");
+    expect(afterLoad.state).toBe("ready");
+  });
+
+  it("returns a live 503 while an application is loading and 200 once it becomes reachable", async () => {
+    const fixture = await buildFixture();
+    const { resetGate, releaseInitialize } = await import("../fixtures/adapters/slow-initialize/index.js");
+    resetGate();
+
+    const { host } = await loadHostRaw(fixture, [{ id: "slow-app", adapter: "slow-initialize" }]);
+    const app = express();
+    host.mountAll(app);
+
+    const duringLoad = await request(app).get("/slow-app/anything");
+    expect(duringLoad.status).toBe(503);
+    expect(["loading", "initializing"]).toContain(duringLoad.body.state);
+
+    releaseInitialize();
+    await host.settled();
+
+    const afterLoad = await request(app).get("/slow-app/anything");
+    expect(afterLoad.status).toBe(404);
+  });
+
+  it("runs the injected install step for each enabled application before importing its adapter", async () => {
+    const fixture = await buildFixture();
+    const installed: string[] = [];
+    const { host } = await loadHostRaw(fixture, [{ id: "routes-app", adapter: "routes" }], async (application) => {
+      installed.push(application.id);
+    });
+    await host.settled();
+
+    expect(installed).toEqual(["routes-app"]);
+    const status = await host.statusFor("routes-app");
+    expect(status.state).toBe("ready");
+  });
+
+  it("marks an application unavailable when its install step fails, without importing the adapter", async () => {
+    const fixture = await buildFixture();
+    const { host } = await loadHostRaw(fixture, [{ id: "routes-app", adapter: "routes" }], async () => {
+      throw new Error("Simulated install failure");
+    });
+    await host.settled();
+
+    const status = await host.statusFor("routes-app");
+    expect(status.state).toBe("unavailable");
+    expect(status.summary).not.toContain("Simulated");
+  });
+});
+
+describe("ApplicationHost retry", () => {
+  it("re-attempts a failed application through the same pipeline and reaches ready", async () => {
+    const fixture = await buildFixture();
+    let attempt = 0;
+    const installDependencies: ApplicationHostOptions["installDependencies"] = async () => {
+      attempt += 1;
+      if (attempt === 1) throw new Error("Simulated install failure");
+    };
+    const { host } = await loadHostRaw(fixture, [{ id: "routes-app", adapter: "routes" }], installDependencies);
+    await host.settled();
+
+    const failed = await host.statusFor("routes-app");
+    expect(failed.state).toBe("unavailable");
+
+    const accepted = host.retry("routes-app");
+    expect(accepted).toBe(true);
+
+    const duringRetry = await host.statusFor("routes-app");
+    expect(["loading", "initializing"]).toContain(duringRetry.state);
+
+    await host.settled();
+
+    const succeeded = await host.statusFor("routes-app");
+    expect(succeeded.state).toBe("ready");
+    expect(attempt).toBe(2);
+  });
+
+  it("returns false and does nothing for an app that is not currently unavailable", async () => {
+    const fixture = await buildFixture();
+    const { host } = await loadHost(fixture, [{ id: "routes-app", adapter: "routes" }]);
+
+    const status = await host.statusFor("routes-app");
+    expect(status.state).toBe("ready");
+
+    expect(host.retry("routes-app")).toBe(false);
+    expect(host.retry("does-not-exist")).toBe(false);
+
+    const stillReady = await host.statusFor("routes-app");
+    expect(stillReady.state).toBe("ready");
   });
 });
 

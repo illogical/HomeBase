@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import type { Server } from "node:http";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import express, { Router, type Express } from "express";
+import express, { Router, type Express, type RequestHandler } from "express";
 import type { ApplicationConfiguration } from "../config/models.js";
 import {
   HOSTED_CONTRACT_VERSION,
@@ -12,12 +12,14 @@ import {
   type Disposer,
   type HostedApplication,
 } from "../contracts/hostedApplication.js";
+import { installDependencies as defaultInstallDependencies, type InstallDependenciesFn } from "./installDependencies.js";
 import type { ConfigService } from "./ConfigService.js";
 
 // Generous enough to cover module resolution over a Docker Desktop
 // Windows-host bind mount, where require()/import() directory-tree walks
 // against a large node_modules can be an order of magnitude slower than on
 // a native filesystem.
+const INSTALL_TIMEOUT_MS = 120_000;
 const IMPORT_AND_FACTORY_TIMEOUT_MS = 30_000;
 const INITIALIZE_TIMEOUT_MS = 10_000;
 const ATTACH_REALTIME_TIMEOUT_MS = 5000;
@@ -52,6 +54,10 @@ interface ApplicationRecord {
   realtimeDisposer: Disposer | undefined;
 }
 
+export interface ApplicationHostOptions {
+  readonly installDependencies?: InstallDependenciesFn;
+}
+
 class TimeoutError extends Error {
   constructor(operation: string, ms: number) {
     super(`${operation} timed out after ${ms}ms.`);
@@ -63,13 +69,17 @@ async function withTimeout<T>(
   operation: string,
   ms: number,
   run: () => Promise<T>,
+  onTimeout?: () => void,
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
       run(),
       new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new TimeoutError(operation, ms)), ms);
+        timer = setTimeout(() => {
+          onTimeout?.();
+          reject(new TimeoutError(operation, ms));
+        }, ms);
       }),
     ]);
   } finally {
@@ -88,25 +98,72 @@ export class ApplicationHost {
   readonly #records: ApplicationRecord[];
   readonly #recordsById: ReadonlyMap<string, ApplicationRecord>;
   readonly #logger: ApplicationLogger;
+  readonly #pendingLoads: Promise<void>[] = [];
+  readonly #hostOrigin: string | undefined;
+  readonly #installDeps: InstallDependenciesFn;
   #server: Server | undefined;
   #shuttingDown = false;
   #shutdownPromise: Promise<void> | undefined;
 
-  private constructor(records: ApplicationRecord[], logger: ApplicationLogger) {
+  private constructor(
+    records: ApplicationRecord[],
+    logger: ApplicationLogger,
+    hostOrigin: string | undefined,
+    installDeps: InstallDependenciesFn,
+  ) {
     this.#records = records;
     this.#recordsById = new Map(records.map((record) => [record.application.id, record]));
     this.#logger = logger;
+    this.#hostOrigin = hostOrigin;
+    this.#installDeps = installDeps;
   }
 
   static async loadAll(
     configService: ConfigService,
     rootLogger: ApplicationLogger,
+    options: ApplicationHostOptions = {},
   ): Promise<ApplicationHost> {
-    const records: ApplicationRecord[] = [];
-    for (const application of configService.applications) {
-      records.push(await loadOne(application, configService.hostOrigin, rootLogger));
+    const installDeps = options.installDependencies ?? defaultInstallDependencies;
+    const records = configService.applications.map((application) => createInitialRecord(application));
+    const host = new ApplicationHost(records, rootLogger, configService.hostOrigin, installDeps);
+
+    for (const record of records) {
+      if (record.state !== "loading") continue;
+      host.#pendingLoads.push(
+        host.#loadOne(record).catch(() => {
+          // #loadOne always resolves the record to a terminal state itself;
+          // this catch only guards against a truly unexpected throw so one
+          // app's background load can never reject the settled() aggregate.
+        }),
+      );
     }
-    return new ApplicationHost(records, rootLogger);
+
+    return host;
+  }
+
+  /** Resolves once every application's background load has reached a terminal state. Test-only. */
+  async settled(): Promise<void> {
+    await Promise.all(this.#pendingLoads);
+  }
+
+  /**
+   * Re-attempts loading a currently "unavailable" application (e.g. after a
+   * transient install failure) using the same pipeline as the initial boot.
+   * Returns false without effect if the app is unknown or not currently
+   * "unavailable" (already loading or loaded).
+   */
+  retry(id: string): boolean {
+    const record = this.#recordsById.get(id);
+    if (!record || record.state !== "unavailable") return false;
+
+    record.state = "loading";
+    record.summary = "Waiting to retry.";
+    this.#pendingLoads.push(
+      this.#loadOne(record).catch(() => {
+        // See loadAll(): #loadOne always resolves the record itself.
+      }),
+    );
+    return true;
   }
 
   mountAll(app: Express): void {
@@ -118,22 +175,28 @@ export class ApplicationHost {
 
   async attachRealtime(server: Server): Promise<void> {
     this.#server = server;
-    for (const record of this.#records) {
-      if (record.state !== "loaded" || !record.instance?.attachRealtime) continue;
-      const logger = this.#childLogger(record.application.id);
-      try {
-        const disposer = await withTimeout(
-          "attachRealtime",
-          ATTACH_REALTIME_TIMEOUT_MS,
-          () => Promise.resolve(record.instance!.attachRealtime!(server)),
-        );
-        record.realtimeDisposer = disposer ?? undefined;
-        logger.log("info", "realtime-attached", "Realtime handler attached.");
-      } catch (error) {
-        logger.log("warn", "realtime-attach-failed", "Realtime attachment failed.", {
-          error,
-        });
-      }
+    await Promise.all(
+      this.#records
+        .filter((record) => record.state === "loaded")
+        .map((record) => this.#attachRealtimeIfReady(record)),
+    );
+  }
+
+  async #attachRealtimeIfReady(record: ApplicationRecord): Promise<void> {
+    if (!this.#server || record.state !== "loaded" || !record.instance?.attachRealtime) return;
+    const logger = this.#childLogger(record.application.id);
+    try {
+      const disposer = await withTimeout(
+        "attachRealtime",
+        ATTACH_REALTIME_TIMEOUT_MS,
+        () => Promise.resolve(record.instance!.attachRealtime!(this.#server!)),
+      );
+      record.realtimeDisposer = disposer ?? undefined;
+      logger.log("info", "realtime-attached", "Realtime handler attached.");
+    } catch (error) {
+      logger.log("warn", "realtime-attach-failed", "Realtime attachment failed.", {
+        error,
+      });
     }
   }
 
@@ -200,6 +263,10 @@ export class ApplicationHost {
         // Server was already closed or never started; nothing further to do.
       }
 
+      // Let in-flight background loads reach a terminal state so #loadOne's
+      // own shutdown check can dispose anything it just finished creating.
+      await Promise.all(this.#pendingLoads);
+
       await this.#waitForActiveWork();
       await this.#disposeAll();
 
@@ -255,14 +322,113 @@ export class ApplicationHost {
   #childLogger(applicationId: string): ApplicationLogger {
     return this.#logger.child({ applicationId });
   }
+
+  async #loadOne(record: ApplicationRecord): Promise<void> {
+    const { application } = record;
+    const logger = this.#childLogger(application.id);
+
+    record.summary = "Installing dependencies.";
+    const installController = new AbortController();
+    try {
+      await withTimeout(
+        "installDependencies",
+        INSTALL_TIMEOUT_MS,
+        () => this.#installDeps(application, logger, installController.signal),
+        () => installController.abort(),
+      );
+    } catch (error) {
+      logger.log("error", "install-failed", "Dependency installation failed.", { error });
+      record.state = "unavailable";
+      record.summary = "Dependencies could not be installed.";
+      return;
+    }
+
+    logger.log("info", "load-begin", "Loading hosted adapter.");
+    record.summary = "Loading hosted adapter.";
+
+    let instance: HostedApplication;
+    try {
+      instance = await withTimeout(
+        "import",
+        IMPORT_AND_FACTORY_TIMEOUT_MS,
+        async (): Promise<HostedApplication> => {
+          const moduleUrl = pathToFileURL(application.adapterFile).href;
+          const imported = (await import(moduleUrl)) as { default?: unknown };
+          const factory = imported.default;
+          if (typeof factory !== "function") {
+            throw new Error("The adapter module has no default export function.");
+          }
+          await mkdir(application.dataPath, { recursive: true });
+          const options = {
+            applicationId: application.id,
+            repositoryRoot: application.repositoryRoot,
+            basePath: application.basePath,
+            hostOrigin: this.#hostOrigin,
+            dataPath: application.dataPath,
+            config: application.adapterConfig,
+            logger,
+          };
+          return (factory as CreateHostedApplication)(options);
+        },
+      );
+    } catch (error) {
+      logger.log("error", "load-failed", "The hosted adapter could not be loaded.", { error });
+      record.state = "unavailable";
+      record.summary = "The hosted adapter could not be loaded.";
+      return;
+    }
+
+    if (
+      instance === null ||
+      typeof instance !== "object" ||
+      typeof instance.getStatus !== "function" ||
+      instance.contractVersion !== HOSTED_CONTRACT_VERSION
+    ) {
+      logger.log(
+        "error",
+        "load-incompatible",
+        "The hosted adapter is incompatible or failed to initialize.",
+      );
+      record.state = "unavailable";
+      record.summary = "The hosted adapter is incompatible or failed to initialize.";
+      return;
+    }
+
+    try {
+      if (instance.initialize) {
+        record.state = "initializing";
+        record.summary = "Initializing application.";
+        await withTimeout("initialize", INITIALIZE_TIMEOUT_MS, () => instance.initialize!());
+      }
+    } catch (error) {
+      logger.log("error", "initialize-failed", "The hosted adapter failed to initialize.", {
+        error,
+      });
+      record.state = "unavailable";
+      record.summary = "The hosted adapter failed to initialize.";
+      return;
+    }
+
+    if (this.#shuttingDown) {
+      try {
+        await instance.dispose?.();
+      } catch {
+        // Best effort: HomeBase is already shutting down.
+      }
+      record.state = "unavailable";
+      record.summary = "HomeBase is shutting down.";
+      return;
+    }
+
+    logger.log("info", "load-complete", "Hosted adapter loaded.");
+    record.state = "loaded";
+    record.summary = "This application is loaded.";
+    record.instance = instance;
+    await this.#attachRealtimeIfReady(record);
+  }
 }
 
-async function loadOne(
-  application: ApplicationConfiguration,
-  hostOrigin: string | undefined,
-  rootLogger: ApplicationLogger,
-): Promise<ApplicationRecord> {
-  const logger = rootLogger.child({ applicationId: application.id });
+function createInitialRecord(application: ApplicationConfiguration): ApplicationRecord {
   const since = new Date().toISOString();
 
   if (!application.enabled) {
@@ -277,7 +443,6 @@ async function loadOne(
   }
 
   if (application.startupIssue) {
-    logger.log("error", "load-failed", application.startupIssue.message);
     return {
       application,
       state: "unavailable",
@@ -288,92 +453,41 @@ async function loadOne(
     };
   }
 
-  logger.log("info", "load-begin", "Loading hosted adapter.");
-
-  let instance: HostedApplication;
-  try {
-    instance = await withTimeout(
-      "import",
-      IMPORT_AND_FACTORY_TIMEOUT_MS,
-      async (): Promise<HostedApplication> => {
-        const moduleUrl = pathToFileURL(application.adapterFile).href;
-        const imported = (await import(moduleUrl)) as { default?: unknown };
-        const factory = imported.default;
-        if (typeof factory !== "function") {
-          throw new Error("The adapter module has no default export function.");
-        }
-        await mkdir(application.dataPath, { recursive: true });
-        const options = {
-          applicationId: application.id,
-          repositoryRoot: application.repositoryRoot,
-          basePath: application.basePath,
-          hostOrigin,
-          dataPath: application.dataPath,
-          config: application.adapterConfig,
-          logger,
-        };
-        return (factory as CreateHostedApplication)(options);
-      },
-    );
-  } catch (error) {
-    logger.log("error", "load-failed", "The hosted adapter could not be loaded.", { error });
-    return {
-      application,
-      state: "unavailable",
-      summary: "The hosted adapter could not be loaded.",
-      since,
-      instance: undefined,
-      realtimeDisposer: undefined,
-    };
-  }
-
-  if (
-    instance === null ||
-    typeof instance !== "object" ||
-    typeof instance.getStatus !== "function" ||
-    instance.contractVersion !== HOSTED_CONTRACT_VERSION
-  ) {
-    logger.log(
-      "error",
-      "load-incompatible",
-      "The hosted adapter is incompatible or failed to initialize.",
-    );
-    return {
-      application,
-      state: "unavailable",
-      summary: "The hosted adapter is incompatible or failed to initialize.",
-      since,
-      instance: undefined,
-      realtimeDisposer: undefined,
-    };
-  }
-
-  try {
-    if (instance.initialize) {
-      await withTimeout("initialize", INITIALIZE_TIMEOUT_MS, () => instance.initialize!());
-    }
-  } catch (error) {
-    logger.log("error", "initialize-failed", "The hosted adapter failed to initialize.", {
-      error,
-    });
-    return {
-      application,
-      state: "unavailable",
-      summary: "The hosted adapter failed to initialize.",
-      since,
-      instance: undefined,
-      realtimeDisposer: undefined,
-    };
-  }
-
-  logger.log("info", "load-complete", "Hosted adapter loaded.");
   return {
     application,
-    state: "loaded",
-    summary: "This application is loaded.",
+    state: "loading",
+    summary: "Waiting to load.",
     since,
-    instance,
+    instance: undefined,
     realtimeDisposer: undefined,
+  };
+}
+
+function resolveHandler(record: ApplicationRecord): RequestHandler {
+  const instance = record.instance;
+  if (instance?.router) {
+    return instance.router;
+  }
+  if (instance?.staticAssets) {
+    const { directory, spaFallback } = instance.staticAssets;
+    const staticMiddleware = express.static(directory, { fallthrough: spaFallback });
+    if (!spaFallback) {
+      return staticMiddleware;
+    }
+    return (request, response, next) => {
+      staticMiddleware(request, response, (error) => {
+        if (error) {
+          next(error);
+          return;
+        }
+        response.sendFile(join(directory, "index.html"), (sendError) => {
+          if (sendError) next(sendError);
+        });
+      });
+    };
+  }
+  return (_request, response) => {
+    response.status(404).json({ error: "not_found" });
   };
 }
 
@@ -389,37 +503,22 @@ function mountApplication(app: Express, record: ApplicationRecord): void {
 
   const router = Router();
 
-  if (record.state === "unavailable") {
-    router.use((_request, response) => {
-      response.status(503).json({ state: record.state, statusSummary: record.summary });
-    });
-    app.use(basePath, router);
-    return;
-  }
+  // Cached lazily once the record first reaches "loaded", so a hosted
+  // application's router/static middleware isn't rebuilt on every request.
+  let cachedInstance: HostedApplication | undefined;
+  let cachedHandler: RequestHandler | undefined;
 
-  const instance = record.instance;
-  let handled = false;
-  if (instance?.router) {
-    router.use(instance.router);
-    handled = true;
-  }
-  if (instance?.staticAssets) {
-    const { directory, spaFallback } = instance.staticAssets;
-    router.use(express.static(directory, { fallthrough: spaFallback }));
-    if (spaFallback) {
-      router.use((_request, response, next) => {
-        response.sendFile(join(directory, "index.html"), (error) => {
-          if (error) next(error);
-        });
-      });
+  router.use((request, response, next) => {
+    if (record.state !== "loaded" || !record.instance) {
+      response.status(503).json({ state: record.state, statusSummary: record.summary });
+      return;
     }
-    handled = true;
-  }
-  if (!handled) {
-    router.use((_request, response) => {
-      response.status(404).json({ error: "not_found" });
-    });
-  }
+    if (cachedHandler === undefined || cachedInstance !== record.instance) {
+      cachedInstance = record.instance;
+      cachedHandler = resolveHandler(record);
+    }
+    cachedHandler(request, response, next);
+  });
 
   app.use(basePath, router);
 }

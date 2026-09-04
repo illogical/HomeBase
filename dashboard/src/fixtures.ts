@@ -74,6 +74,7 @@ export class FixtureDashboardDataSource implements DashboardDataSource {
   private readonly runsById = new Map<string, RunState>();
   private readonly listenersByRun = new Map<string, Set<RunListener>>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly applicationOverrides = new Map<string, DashboardApplication>();
 
   constructor(private readonly scenario: FixtureScenario) {}
 
@@ -81,7 +82,40 @@ export class FixtureDashboardDataSource implements DashboardDataSource {
     if (this.scenario === "loading") {
       return waitUntilAborted(signal);
     }
-    return Promise.resolve(this.scenario === "empty" ? emptyApplications : mixedApplications);
+    if (this.scenario === "empty") {
+      return Promise.resolve(emptyApplications);
+    }
+    return Promise.resolve(
+      Object.freeze(
+        mixedApplications.map((application) => this.applicationOverrides.get(application.id) ?? application),
+      ),
+    );
+  }
+
+  retryApplication(applicationId: string): Promise<void> {
+    const base = mixedApplications.find((application) => application.id === applicationId);
+    if (!base) return Promise.resolve();
+
+    this.applicationOverrides.set(
+      applicationId,
+      freezeApplication({ ...base, state: "loading", statusSummary: "Waiting to retry." }),
+    );
+
+    const timerKey = `retry:${applicationId}`;
+    const existing = this.timers.get(timerKey);
+    if (existing !== undefined) clearTimeout(existing);
+    this.timers.set(
+      timerKey,
+      setTimeout(() => {
+        this.applicationOverrides.set(
+          applicationId,
+          freezeApplication({ ...base, state: "ready", statusSummary: "Ready." }),
+        );
+        this.timers.delete(timerKey);
+      }, 800),
+    );
+
+    return Promise.resolve();
   }
 
   getGitStatus(): Promise<GitStatus> {

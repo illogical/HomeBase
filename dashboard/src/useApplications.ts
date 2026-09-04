@@ -7,6 +7,15 @@ interface ApplicationLoadState {
   readonly retry: () => void;
 }
 
+const POLL_INTERVAL_MS = 2000;
+
+function hasNonTerminalApplication(applications: readonly DashboardApplication[] | null): boolean {
+  if (applications === null) return false;
+  return applications.some(
+    (application) => application.state === "loading" || application.state === "initializing",
+  );
+}
+
 export function useApplications(dataSource: DashboardDataSource): ApplicationLoadState {
   const [state, setState] = useState<{
     readonly applications: readonly DashboardApplication[] | null;
@@ -20,24 +29,32 @@ export function useApplications(dataSource: DashboardDataSource): ApplicationLoa
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const load = (): void => {
+      void dataSource.listApplications(controller.signal).then(
+        (applications) => {
+          if (!active) return;
+          setState({ applications, error: false });
+          if (hasNonTerminalApplication(applications)) {
+            pollTimer = setTimeout(load, POLL_INTERVAL_MS);
+          }
+        },
+        (error: unknown) => {
+          if (active && !isAbortError(error)) {
+            setState({ applications: Object.freeze([]), error: true });
+          }
+        },
+      );
+    };
 
     setState({ applications: null, error: false });
-    void dataSource.listApplications(controller.signal).then(
-      (applications) => {
-        if (active) {
-          setState({ applications, error: false });
-        }
-      },
-      (error: unknown) => {
-        if (active && !isAbortError(error)) {
-          setState({ applications: Object.freeze([]), error: true });
-        }
-      },
-    );
+    load();
 
     return () => {
       active = false;
       controller.abort();
+      if (pollTimer !== undefined) clearTimeout(pollTimer);
     };
   }, [dataSource, attempt]);
 

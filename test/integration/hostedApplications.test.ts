@@ -2,9 +2,15 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ApplicationHost } from "../../src/services/ApplicationHost.js";
 import { startServer, type StartedHomeBase } from "../../src/startServer.js";
 import { createConfigFixture, type ConfigFixture } from "../support/configFixture.js";
 import { fixtureAdaptersWorkspaceRoot, fixtureApplication } from "../support/fixtureAdapters.js";
+
+const loadApplicationHost = (
+  ...args: Parameters<typeof ApplicationHost.loadAll>
+): ReturnType<typeof ApplicationHost.loadAll> =>
+  ApplicationHost.loadAll(args[0], args[1], { installDependencies: async () => {} });
 
 const cleanupTasks: Array<() => Promise<void>> = [];
 
@@ -60,7 +66,9 @@ describe("startServer end-to-end with hosted fixtures", () => {
         },
         initializeDashboard: dashboard.initializeDashboard,
         listen: vi.fn(async () => undefined),
+        loadApplicationHost,
       });
+      await started.applicationHost.settled();
 
       const listing = await request(started.app).get("/api/applications");
       expect(listing.status).toBe(200);
@@ -148,7 +156,9 @@ describe("startServer end-to-end with hosted fixtures", () => {
         },
         initializeDashboard: fakeDashboard().initializeDashboard,
         listen: vi.fn(async () => undefined),
+        loadApplicationHost,
       });
+      await started.applicationHost.settled();
 
       const listing = await request(started.app).get("/api/applications");
       expect(listing.status).toBe(200);

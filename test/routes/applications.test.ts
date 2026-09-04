@@ -16,10 +16,10 @@ async function enableFirstApp(fixture: Awaited<ReturnType<typeof createConfigFix
   await writeFile(adapter, "export {};", "utf8");
 }
 
-async function buildApp(
+async function buildAppWithHost(
   fixture: Awaited<ReturnType<typeof createConfigFixture>>,
   workspaceRoot: string = fixture.workspaceRoot,
-): Promise<ReturnType<typeof createApp>["app"]> {
+): Promise<{ app: ReturnType<typeof createApp>["app"]; applicationHost: ApplicationHost }> {
   const configService = await ConfigService.load({
     projectRoot: fixture.projectRoot,
     environment: {
@@ -28,8 +28,18 @@ async function buildApp(
     },
     nodeVersion: "24.0.0",
   });
-  const applicationHost = await ApplicationHost.loadAll(configService, createTestLogger());
-  return createApp(configService, applicationHost).app;
+  const applicationHost = await ApplicationHost.loadAll(configService, createTestLogger(), {
+    installDependencies: async () => {},
+  });
+  await applicationHost.settled();
+  return { app: createApp(configService, applicationHost).app, applicationHost };
+}
+
+async function buildApp(
+  fixture: Awaited<ReturnType<typeof createConfigFixture>>,
+  workspaceRoot: string = fixture.workspaceRoot,
+): Promise<ReturnType<typeof createApp>["app"]> {
+  return (await buildAppWithHost(fixture, workspaceRoot)).app;
 }
 
 describe("GET /api/applications", () => {
@@ -129,6 +139,57 @@ describe("GET /api/applications", () => {
         "second-app",
         "first-app",
       ]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+});
+
+describe("POST /api/applications/:id/retry", () => {
+  it("accepts a retry for an unavailable application and re-attempts loading it", async () => {
+    const fixture = await createConfigFixture();
+    try {
+      const registry = validRegistry();
+      registry.applications[0]!.enabled = true;
+      await enableFirstApp(fixture);
+      await fixture.writeRegistry(registry);
+      const { app, applicationHost } = await buildAppWithHost(fixture);
+
+      const before = await request(app).get("/api/applications");
+      expect(before.body.find((entry: { id: string }) => entry.id === "first-app").state).toBe(
+        "unavailable",
+      );
+
+      const retryResponse = await request(app).post("/api/applications/first-app/retry");
+      expect(retryResponse.status).toBe(202);
+      expect(["loading", "initializing"]).toContain(retryResponse.body.state);
+
+      await applicationHost.settled();
+
+      const after = await request(app).get("/api/applications");
+      expect(after.body.find((entry: { id: string }) => entry.id === "first-app").state).toBe(
+        "unavailable",
+      );
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("rejects a retry for an application that is not currently unavailable", async () => {
+    const fixture = await createConfigFixture();
+    try {
+      await fixture.writeRegistry({
+        schemaVersion: 1,
+        server: { port: 17000 },
+        applications: [fixtureApplication("routes-app", "routes")],
+      });
+      const { app } = await buildAppWithHost(fixture, fixtureAdaptersWorkspaceRoot);
+
+      const readyResponse = await request(app).post("/api/applications/routes-app/retry");
+      expect(readyResponse.status).toBe(409);
+
+      const unknownResponse = await request(app).post("/api/applications/does-not-exist/retry");
+      expect(unknownResponse.status).toBe(409);
     } finally {
       await fixture.cleanup();
     }

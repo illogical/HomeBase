@@ -302,6 +302,11 @@ p {
   background: currentColor;
 }
 
+.state-loading .status-dot,
+.state-initializing .status-dot {
+  animation: skeleton-pulse 1.4s ease-in-out infinite alternate;
+}
+
 .card-copy {
   margin-top: 24px;
 }

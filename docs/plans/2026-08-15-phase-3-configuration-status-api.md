@@ -296,7 +296,7 @@ Implemented on 2026-08-16:
 - Commands: `npm run typecheck`, `npm test` (8 files, 87 tests), and
   `npm run build` all passed.
 - Manual verification: ran `npm run build && npm start` against the local
-  `config/homebase.json` (all four sample applications `enabled: false`).
+  `config/homebase.json` (all four applications `enabled: false`).
   Confirmed `GET /api/applications` returns all four as `disabled` with the
   expected sanitized shape and `Cache-Control: no-store`; confirmed
   `repoPath`/`repositoryRoot`/`adapterPath`/`adapterFile` and the raw

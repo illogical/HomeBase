@@ -57,6 +57,16 @@ export class HttpDashboardDataSource implements DashboardDataSource {
     return parseApplicationListing(payload);
   }
 
+  async retryApplication(applicationId: string, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(`/api/applications/${encodeURIComponent(applicationId)}/retry`, {
+      method: "POST",
+      signal: signal ?? null,
+    });
+    if (!response.ok) {
+      throw new Error(`Retry request failed with status ${response.status}.`);
+    }
+  }
+
   async getGitStatus(applicationId: string, signal?: AbortSignal): Promise<GitStatus> {
     const response = await fetch(`/api/homebase/applications/${encodeURIComponent(applicationId)}/git-status`, {
       signal: signal ?? null,

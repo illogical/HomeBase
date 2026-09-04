@@ -31,7 +31,7 @@ RUN npm ci
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
   CMD ["node", "scripts/healthcheck.mjs"]
 
-CMD ["sh", "-c", "node scripts/installSiblingDeps.mjs && npx nodemon --legacy-watch --watch src --ext ts,json --exec 'node --import tsx src/dev.ts'"]
+CMD ["npx", "nodemon", "--legacy-watch", "--watch", "src", "--ext", "ts,json", "--exec", "node --import tsx src/dev.ts"]
 
 # --- runtime stage -------------------------------------------------------
 FROM node:24-slim AS runtime

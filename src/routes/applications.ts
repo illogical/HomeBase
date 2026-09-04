@@ -32,6 +32,18 @@ export function createApplicationsRouter(
     response.status(200).json(entries);
   });
 
+  router.post("/applications/:id/retry", async (request, response) => {
+    const accepted = applicationHost.retry(request.params.id);
+    if (!accepted) {
+      response.status(409).json({ error: "not-retryable" });
+      return;
+    }
+
+    const { state, summary } = await applicationHost.statusFor(request.params.id);
+    response.setHeader("Cache-Control", "no-store");
+    response.status(202).json({ state, statusSummary: summary });
+  });
+
   return router;
 }
 

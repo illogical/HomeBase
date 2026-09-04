@@ -555,7 +555,7 @@ fixture #5's test) to `package.json`.
   updates.
 - No registry schema field becomes required; `adapterConfig` is optional and
   additive, so existing `config/homebase.json` files remain valid without
-  changes (all current sample applications stay `enabled: false`, so no
+  changes (all current applications stay `enabled: false`, so no
   adapter is actually loaded by today's local registry until a developer
   opts a fixture or real application in).
 - Rollback removes `src/contracts/`, `src/logging/`, `src/services/

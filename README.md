@@ -332,7 +332,8 @@ npm run rebuild:dev
 ```
 
 For every **enabled** application in `config/homebase.json`, this installs
-dependencies (`npm install --no-package-lock`, matching `installSiblingDeps.mjs`)
+dependencies (`npm install --no-package-lock`, matching the install step
+`ApplicationHost` runs for each sibling as part of its own background load)
 in that application's directory under `HOMEBASE_WORKSPACE_PATH`, then runs up
 to two build scripts read from that app's own `package.json` — plain `build`
 alone is not enough, since sibling repos split it:

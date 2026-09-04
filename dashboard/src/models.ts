@@ -89,6 +89,7 @@ export class RunOperationConflictError extends Error {
 
 export interface DashboardDataSource {
   listApplications(signal?: AbortSignal): Promise<readonly DashboardApplication[]>;
+  retryApplication(applicationId: string, signal?: AbortSignal): Promise<void>;
   getGitStatus(applicationId: string, signal?: AbortSignal): Promise<GitStatus>;
   fetchGit(applicationId: string, signal?: AbortSignal): Promise<GitStatus>;
   pullGit(applicationId: string, signal?: AbortSignal): Promise<GitMutationResult>;

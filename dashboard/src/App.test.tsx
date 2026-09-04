@@ -81,11 +81,17 @@ describe("dashboard application", () => {
       const scoped = within(card as HTMLElement);
       expect(scoped.getByText(state)).toBeInTheDocument();
       expect(scoped.getByText(route)).toBeInTheDocument();
-      expect(scoped.queryByRole("link")).not.toBeInTheDocument();
       if (state === "Ready") {
+        expect(scoped.getByRole("link", { name: `Open ${name}` })).toBeInTheDocument();
+        expect(scoped.getByRole("link", { name })).toBeInTheDocument();
+        expect(scoped.getByRole("link", { name: route })).toBeInTheDocument();
         // The ready card renders a GitStatusPanel with Refresh/Fetch/Pull controls.
-        await waitFor(() => expect(scoped.queryByRole("button")).not.toBeNull());
+        await waitFor(() => expect(scoped.queryAllByRole("button").length).toBeGreaterThan(0));
+      } else if (state === "Unavailable") {
+        expect(scoped.queryByRole("link")).not.toBeInTheDocument();
+        expect(scoped.getByRole("button", { name: `Retry loading ${name}` })).toBeInTheDocument();
       } else {
+        expect(scoped.queryByRole("link")).not.toBeInTheDocument();
         expect(scoped.queryByRole("button")).not.toBeInTheDocument();
       }
     }
@@ -94,7 +100,7 @@ describe("dashboard application", () => {
   it("renders an accessible stable loading presentation", () => {
     const { container } = render(<App dataSource={new FixtureDashboardDataSource("loading")} />);
 
-    expect(screen.getByRole("status")).toHaveTextContent("Loading sample applications.");
+    expect(screen.getByRole("status")).toHaveTextContent("Loading applications.");
     expect(screen.getByRole("heading", { level: 2, name: "Applications" }).closest("section")).toHaveAttribute(
       "aria-busy",
       "true",
@@ -105,7 +111,7 @@ describe("dashboard application", () => {
   it("renders the calm empty fixture", async () => {
     render(<App dataSource={new FixtureDashboardDataSource("empty")} />);
 
-    expect(await screen.findByRole("heading", { level: 2, name: "No sample applications" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "No applications" })).toBeInTheDocument();
     expect(screen.getByText(/intentionally shows how HomeBase looks/)).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -117,6 +123,7 @@ describe("dashboard application", () => {
         receivedSignal = signal;
         return new Promise<readonly DashboardApplication[]>(() => undefined);
       },
+      retryApplication: neverVoid,
       getGitStatus: neverGitStatus,
       fetchGit: neverGitStatus,
       pullGit: neverGitMutation,
@@ -158,6 +165,7 @@ describe("dashboard application", () => {
   it("has no automated accessibility violations in the failure/retry state", async () => {
     const dataSource: DashboardDataSource = {
       listApplications: vi.fn(async () => Promise.reject(new Error("fixture failure"))),
+      retryApplication: neverVoid,
       getGitStatus: neverGitStatus,
       fetchGit: neverGitStatus,
       pullGit: neverGitMutation,
@@ -178,6 +186,7 @@ describe("dashboard application", () => {
         .mockResolvedValueOnce(
           await new FixtureDashboardDataSource("mixed").listApplications(),
         ),
+      retryApplication: neverVoid,
       getGitStatus: neverGitStatus,
       fetchGit: neverGitStatus,
       pullGit: neverGitMutation,
@@ -187,7 +196,7 @@ describe("dashboard application", () => {
     render(<App dataSource={dataSource} />);
 
     expect(
-      await screen.findByRole("heading", { level: 2, name: "Sample applications could not be loaded" }),
+      await screen.findByRole("heading", { level: 2, name: "Applications could not be loaded" }),
     ).toBeInTheDocument();
     const retryButton = screen.getByRole("button", { name: "Retry loading applications" });
 
@@ -200,4 +209,58 @@ describe("dashboard application", () => {
     expect(await screen.findByRole("heading", { level: 3, name: "DevPlanner" })).toBeInTheDocument();
     expect(dataSource.listApplications).toHaveBeenCalledTimes(2);
   });
+
+  it("retries an unavailable application and follows it through to ready", { timeout: 8000 }, async () => {
+    const user = userEvent.setup();
+    const dataSource = new FixtureDashboardDataSource("mixed");
+    render(<App dataSource={dataSource} />);
+
+    const card = (await screen.findByRole("heading", { level: 3, name: "LMEval" })).closest("article") as HTMLElement;
+    const scoped = within(card);
+    expect(scoped.getByText("Unavailable")).toBeInTheDocument();
+
+    await user.click(scoped.getByRole("button", { name: "Retry loading LMEval" }));
+
+    await waitFor(() => expect(within(card).getByText("Loading")).toBeInTheDocument());
+    await waitFor(() => expect(within(card).getByText("Ready")).toBeInTheDocument(), {
+      timeout: 4000,
+    });
+  });
+
+  it(
+    "polls for updates while an application is loading, then stops once it becomes ready",
+    async () => {
+      const loadingApp: DashboardApplication = {
+        id: "slow-app",
+        displayName: "Slow App",
+        description: "A sibling application that is still starting up.",
+        basePath: "/slow-app/",
+        state: "loading",
+        statusSummary: "Installing dependencies.",
+      };
+      const readyApp: DashboardApplication = { ...loadingApp, state: "ready", statusSummary: "Ready." };
+      const listApplications = vi
+        .fn()
+        .mockResolvedValueOnce([loadingApp])
+        .mockResolvedValueOnce([readyApp]);
+      const dataSource: DashboardDataSource = {
+        listApplications,
+        retryApplication: neverVoid,
+        getGitStatus: neverGitStatus,
+        fetchGit: neverGitStatus,
+        pullGit: neverGitMutation,
+        ...scriptStubs,
+      };
+
+      render(<App dataSource={dataSource} />);
+
+      await screen.findByText("Loading");
+      await waitFor(() => expect(listApplications).toHaveBeenCalledTimes(2), { timeout: 3000 });
+      await screen.findByText("Ready");
+
+      await new Promise((resolve) => setTimeout(resolve, 2200));
+      expect(listApplications).toHaveBeenCalledTimes(2);
+    },
+    8000,
+  );
 });

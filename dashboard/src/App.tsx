@@ -38,6 +38,26 @@ function ScriptsIcon() {
   );
 }
 
+function RetryIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <polyline points="21 3 21 9 15 9" />
+    </svg>
+  );
+}
+
 function FlipBackIcon() {
   return (
     <svg
@@ -113,7 +133,7 @@ function ApplicationCollection({ applications, error, retry, dataSource }: Appli
     return (
       <section className="empty-state" aria-labelledby="empty-title">
         <div className="empty-mark" aria-hidden="true">HB</div>
-        <h2 id="empty-title">{error ? "Sample applications could not be loaded" : "No sample applications"}</h2>
+        <h2 id="empty-title">{error ? "Applications could not be loaded" : "No applications"}</h2>
         <p>
           {error
             ? "The prototype data source did not return an application list."
@@ -132,12 +152,12 @@ function ApplicationCollection({ applications, error, retry, dataSource }: Appli
     <section aria-labelledby="collection-title">
       <div className="collection-heading">
         <h2 id="collection-title">Applications</h2>
-        <p>{applications.length} sample applications</p>
+        <p>{applications.length} applications</p>
       </div>
       <ul className="application-grid">
         {applications.map((application) => (
           <li key={application.id}>
-            <ApplicationCard application={application} dataSource={dataSource} />
+            <ApplicationCard application={application} dataSource={dataSource} onRetried={retry} />
           </li>
         ))}
       </ul>
@@ -148,18 +168,36 @@ function ApplicationCollection({ applications, error, retry, dataSource }: Appli
 function ApplicationCard({
   application,
   dataSource,
+  onRetried,
 }: {
   readonly application: DashboardApplication;
   readonly dataSource: DashboardDataSource;
+  readonly onRetried: () => void;
 }) {
   const monogram = application.displayName.replace(/[^A-Za-z]/g, "").slice(0, 2).toUpperCase();
   const isReady = application.state === "ready";
+  const isUnavailable = application.state === "unavailable";
   const [isFlipped, setIsFlipped] = useState(false);
   const [hasBeenFlipped, setHasBeenFlipped] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   const flip = (): void => {
     setIsFlipped((flipped) => !flipped);
     setHasBeenFlipped(true);
+  };
+
+  const retryApplication = async (event: MouseEvent<HTMLButtonElement>): Promise<void> => {
+    event.stopPropagation();
+    setIsRetrying(true);
+    try {
+      await dataSource.retryApplication(application.id);
+      onRetried();
+    } catch {
+      // The card's own status summary reflects the outcome on the next poll;
+      // nothing further to show here if the retry request itself failed.
+    } finally {
+      setIsRetrying(false);
+    }
   };
 
   const handleCardClick = (event: MouseEvent<HTMLElement>): void => {
@@ -178,7 +216,11 @@ function ApplicationCard({
         <div className="card-face card-front">
           <div className="card-heading">
             {isReady ? (
-              <a href={application.basePath} rel="noopener noreferrer">
+              <a
+                href={application.basePath}
+                rel="noopener noreferrer"
+                aria-label={`Open ${application.displayName}`}
+              >
                 <div className="app-monogram" aria-hidden="true">{monogram}</div>
               </a>
             ) : (
@@ -198,6 +240,19 @@ function ApplicationCard({
                   title="Run scripts"
                 >
                   <ScriptsIcon />
+                </button>
+              ) : null}
+              {isUnavailable ? (
+                <button
+                  type="button"
+                  className="card-flip-button"
+                  onClick={retryApplication}
+                  disabled={isRetrying}
+                  aria-busy={isRetrying}
+                  aria-label={`Retry loading ${application.displayName}`}
+                  title="Retry"
+                >
+                  <RetryIcon />
                 </button>
               ) : null}
             </div>
@@ -259,7 +314,7 @@ function LoadingApplications() {
     <section aria-labelledby="loading-title" aria-busy="true">
       <div className="collection-heading">
         <h2 id="loading-title">Applications</h2>
-        <p role="status" aria-live="polite">Loading sample applications.</p>
+        <p role="status" aria-live="polite">Loading applications.</p>
       </div>
       <ul className="application-grid skeleton-grid" aria-hidden="true">
         {[0, 1, 2].map((item) => (

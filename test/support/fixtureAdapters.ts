@@ -17,7 +17,8 @@ export type FixtureAdapterName =
   | "throws-on-import"
   | "no-default-export"
   | "throwing-status"
-  | "hanging-dispose";
+  | "hanging-dispose"
+  | "slow-initialize";
 
 export function fixtureApplication(
   id: string,
