@@ -1,7 +1,37 @@
-import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+
+function computeInstallSignature(appPath) {
+  const packageJsonPath = join(appPath, "package.json");
+  if (!existsSync(packageJsonPath)) return undefined;
+
+  const hash = createHash("sha256");
+  hash.update(readFileSync(packageJsonPath));
+  const lockfilePath = join(appPath, "package-lock.json");
+  if (existsSync(lockfilePath)) {
+    hash.update(readFileSync(lockfilePath));
+  }
+  return hash.digest("hex");
+}
+
+function rebuildStampPath(appPath) {
+  return join(appPath, "node_modules", ".homebase-rebuild-signature");
+}
+
+function readInstallStamp(appPath) {
+  try {
+    return readFileSync(rebuildStampPath(appPath), "utf-8").trim();
+  } catch {
+    return undefined;
+  }
+}
+
+function writeInstallStamp(appPath, signature) {
+  writeFileSync(rebuildStampPath(appPath), signature, "utf-8");
+}
 
 const args = process.argv.slice(2);
 const mode = args.includes("--mode")
@@ -44,13 +74,28 @@ for (const application of targets) {
     continue;
   }
 
-  const installArgs = mode === "prod" ? ["ci"] : ["install", "--no-package-lock"];
-  console.log(`[rebuildApps] npm ${installArgs.join(" ")} for ${application.id} (${appPath})`);
-  const install = spawnSync("npm", installArgs, { cwd: appPath, stdio: "inherit", shell: true });
-  if (install.status !== 0) {
-    console.error(`[rebuildApps] npm ${installArgs[0]} failed for ${application.id}`);
-    results.push({ id: application.id, ok: false, reason: "install" });
-    continue;
+  const nodeModulesPath = join(appPath, "node_modules");
+  const signature = mode === "dev" ? computeInstallSignature(appPath) : undefined;
+  const skipInstall =
+    mode === "dev" &&
+    signature !== undefined &&
+    existsSync(nodeModulesPath) &&
+    readInstallStamp(appPath) === signature;
+
+  if (skipInstall) {
+    console.log(`[rebuildApps] Dependencies unchanged for ${application.id}; skipping npm install.`);
+  } else {
+    const installArgs = mode === "prod" ? ["ci"] : ["install"];
+    console.log(`[rebuildApps] npm ${installArgs.join(" ")} for ${application.id} (${appPath})`);
+    const install = spawnSync("npm", installArgs, { cwd: appPath, stdio: "inherit", shell: true });
+    if (install.status !== 0) {
+      console.error(`[rebuildApps] npm ${installArgs[0]} failed for ${application.id}`);
+      results.push({ id: application.id, ok: false, reason: "install" });
+      continue;
+    }
+    if (mode === "dev" && signature !== undefined) {
+      writeInstallStamp(appPath, signature);
+    }
   }
 
   const appPackage = JSON.parse(readFileSync(join(appPath, "package.json"), "utf-8"));

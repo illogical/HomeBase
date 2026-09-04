@@ -332,9 +332,9 @@ npm run rebuild:dev
 ```
 
 For every **enabled** application in `config/homebase.json`, this installs
-dependencies (`npm install --no-package-lock`, matching the install step
-`ApplicationHost` runs for each sibling as part of its own background load)
-in that application's directory under `HOMEBASE_WORKSPACE_PATH`, then runs up
+dependencies (`npm install`, matching the install step `ApplicationHost`
+runs for each sibling as part of its own background load) in that
+application's directory under `HOMEBASE_WORKSPACE_PATH`, then runs up
 to two build scripts read from that app's own `package.json` — plain `build`
 alone is not enough, since sibling repos split it:
 
@@ -347,8 +347,14 @@ alone is not enough, since sibling repos split it:
   `build` does not produce it).
 
 Both are run when present; an app missing both is skipped with a warning
-(nothing to rebuild). Afterward the `homebase-dev` container is restarted so
-the freshly built adapters are re-imported. Pass `--app <id>` to rebuild a
+(nothing to rebuild). Before either build step, `npm run rebuild:dev` skips
+`npm install` entirely for an app whose `package.json`/`package-lock.json`
+haven't changed since its last successful install (tracked via a signature
+file under that app's own `node_modules/`) — matching the skip-if-unchanged
+behavior `ApplicationHost` already uses at HomeBase startup, so rebuilding
+after an edit that doesn't touch dependencies (e.g. a frontend-only change)
+doesn't pay for a redundant install. Afterward the `homebase-dev` container
+is restarted so the freshly built adapters are re-imported. Pass `--app <id>` to rebuild a
 single application (for example `npm run rebuild:dev -- --app devplanner`),
 or `--no-restart` to rebuild without restarting. If the dev container isn't
 running, the restart step warns instead of failing — the sibling is still

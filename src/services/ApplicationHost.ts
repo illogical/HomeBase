@@ -15,11 +15,12 @@ import {
 import { installDependencies as defaultInstallDependencies, type InstallDependenciesFn } from "./installDependencies.js";
 import type { ConfigService } from "./ConfigService.js";
 
-// Generous enough to cover module resolution over a Docker Desktop
-// Windows-host bind mount, where require()/import() directory-tree walks
-// against a large node_modules can be an order of magnitude slower than on
-// a native filesystem.
-const INSTALL_TIMEOUT_MS = 120_000;
+// Generous enough to cover npm install over a Docker Desktop Windows-host
+// bind mount, where filesystem-heavy work against a large node_modules
+// (e.g. LMEval's ~700-package tree) can be an order of magnitude slower
+// than on a native filesystem. 120s proved too tight in practice — real,
+// no-op-equivalent installs were timing out — so this is set generously.
+const INSTALL_TIMEOUT_MS = 300_000;
 const IMPORT_AND_FACTORY_TIMEOUT_MS = 30_000;
 const INITIALIZE_TIMEOUT_MS = 10_000;
 const ATTACH_REALTIME_TIMEOUT_MS = 5000;
