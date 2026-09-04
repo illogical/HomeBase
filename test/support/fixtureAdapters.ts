@@ -7,6 +7,7 @@ export type FixtureAdapterName =
   | "routes"
   | "static-assets"
   | "spa-fallback"
+  | "routes-with-spa-fallback"
   | "websocket"
   | "socket-io"
   | "degraded"

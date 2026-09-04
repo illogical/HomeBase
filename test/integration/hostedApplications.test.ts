@@ -38,6 +38,7 @@ describe("startServer end-to-end with hosted fixtures", () => {
       applications: [
         fixtureApplication("routes-app", "routes", { sortOrder: 1 }),
         fixtureApplication("static-app", "static-assets", { sortOrder: 2 }),
+        fixtureApplication("hybrid-app", "routes-with-spa-fallback", { sortOrder: 4 }),
         {
           id: "disabled-app",
           displayName: "Disabled App",
@@ -76,6 +77,7 @@ describe("startServer end-to-end with hosted fixtures", () => {
         expect.objectContaining({ id: "routes-app", state: "ready" }),
         expect.objectContaining({ id: "static-app", state: "ready" }),
         expect.objectContaining({ id: "disabled-app", state: "disabled" }),
+        expect.objectContaining({ id: "hybrid-app", state: "ready" }),
       ]);
 
       const routesResponse = await request(started.app).get("/routes-app/ping");
@@ -85,6 +87,18 @@ describe("startServer end-to-end with hosted fixtures", () => {
       const staticResponse = await request(started.app).get("/static-app/index.html");
       expect(staticResponse.status).toBe(200);
       expect(staticResponse.text).toContain("static-assets fixture index");
+
+      // Regression coverage for the router+staticAssets fallthrough bug: a
+      // hosted app that provides both must still serve its SPA shell at a
+      // path its own router doesn't own (like the bare base path), not
+      // short-circuit to the router's unmatched-route 404.
+      const hybridRoot = await request(started.app).get("/hybrid-app/");
+      expect(hybridRoot.status).toBe(200);
+      expect(hybridRoot.text).toContain("routes-with-spa-fallback fixture index");
+
+      const hybridPing = await request(started.app).get("/hybrid-app/ping");
+      expect(hybridPing.status).toBe(200);
+      expect(hybridPing.body.ok).toBe(true);
 
       const health = await request(started.app).get("/health");
       expect(health.status).toBe(200);

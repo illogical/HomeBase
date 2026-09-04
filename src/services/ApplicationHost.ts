@@ -465,29 +465,47 @@ function createInitialRecord(application: ApplicationConfiguration): Application
 
 function resolveHandler(record: ApplicationRecord): RequestHandler {
   const instance = record.instance;
+  const handlers: RequestHandler[] = [];
+
   if (instance?.router) {
-    return instance.router;
+    handlers.push(instance.router);
   }
   if (instance?.staticAssets) {
     const { directory, spaFallback } = instance.staticAssets;
-    const staticMiddleware = express.static(directory, { fallthrough: spaFallback });
-    if (!spaFallback) {
-      return staticMiddleware;
-    }
-    return (request, response, next) => {
-      staticMiddleware(request, response, (error) => {
-        if (error) {
-          next(error);
-          return;
-        }
-        response.sendFile(join(directory, "index.html"), (sendError) => {
-          if (sendError) next(sendError);
+    handlers.push(express.static(directory, { fallthrough: spaFallback }));
+    if (spaFallback) {
+      handlers.push((_request, response, next) => {
+        response.sendFile(join(directory, "index.html"), (error) => {
+          if (error) next(error);
         });
       });
-    };
+    }
   }
-  return (_request, response) => {
-    response.status(404).json({ error: "not_found" });
+  if (handlers.length === 0) {
+    handlers.push((_request, response) => {
+      response.status(404).json({ error: "not_found" });
+    });
+  }
+
+  // Chain router -> static -> SPA fallback so an app that provides both a
+  // router and staticAssets falls through to the static/SPA handler for any
+  // path the router itself doesn't own (e.g. the bare base path), instead of
+  // the router's unmatched-route 404 short-circuiting everything after it.
+  return (request, response, next) => {
+    let index = 0;
+    const runNext = (error?: unknown) => {
+      if (error) {
+        next(error);
+        return;
+      }
+      const handler = handlers[index++];
+      if (!handler) {
+        next();
+        return;
+      }
+      handler(request, response, runNext);
+    };
+    runNext();
   };
 }
 
