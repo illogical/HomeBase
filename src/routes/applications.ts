@@ -44,6 +44,20 @@ export function createApplicationsRouter(
     response.status(202).json({ state, statusSummary: summary });
   });
 
+  // Development hot reload: re-imports the application's compiled adapter and
+  // swaps the live instance. Unlike retry this is allowed from "loaded", and it
+  // responds only once the swap has settled, so a caller (the dev watcher, or a
+  // developer with curl) learns whether the new adapter actually came up.
+  router.post("/applications/:id/reload", async (request, response) => {
+    const outcome = await applicationHost.reload(request.params.id);
+    response.setHeader("Cache-Control", "no-store");
+    if (!outcome.ok) {
+      response.status(outcome.reason === "unknown" ? 404 : 409).json({ error: outcome.reason });
+      return;
+    }
+    response.status(200).json({ state: outcome.state, statusSummary: outcome.summary });
+  });
+
   return router;
 }
 

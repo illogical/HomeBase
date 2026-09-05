@@ -303,7 +303,18 @@ setup steps.
 **Plan:** create one aligned plan per capability
 
 - [ ] Coordinated cross-repository development watching, frontend HMR, and host
-  restart behavior.
+  restart behavior — **Partially implemented (development only), live
+  verification outstanding** — Plan:
+  [hosted-application hot reload](plans/2026-09-04-hosted-app-hot-reload.md);
+  analysis: [gap analysis](plans/2026-09-03-hosted-app-hot-reload-gap-analysis.md).
+  Shipped: `ApplicationHost.reload(id)` with dispose-then-reimport instance
+  swap (`SPECIFICATION.md` §6a), `POST /api/applications/:id/reload` (§4.2),
+  and a development-only `DevReloadService` that watches each enabled sibling's
+  source, runs that sibling's own build scripts, and hot reloads its compiled
+  adapter. Automated tests pass; still unchecked because end-to-end
+  verification against the running `homebase-dev` container and real sibling
+  repositories has not been done, and frontend HMR for hosted applications
+  remains out of scope.
 - [ ] Build and loaded-revision visibility.
 - [ ] Dependency installation, build verification, restart, and rollback after
   a pull.

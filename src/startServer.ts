@@ -12,6 +12,7 @@ import type { ApplicationLogger } from "./contracts/hostedApplication.js";
 import { RootLogger } from "./logging/RootLogger.js";
 import { ApplicationHost } from "./services/ApplicationHost.js";
 import { ConfigService, type ConfigServiceLoadOptions } from "./services/ConfigService.js";
+import { DevReloadService } from "./services/DevReloadService.js";
 
 export interface StartServerOptions {
   readonly config?: ConfigServiceLoadOptions;
@@ -32,6 +33,8 @@ export interface StartServerOptions {
   ) => Promise<DashboardController>;
   readonly dashboard?: Omit<InitializeDashboardOptions, "mode">;
   readonly listen?: (server: Server, port: number) => Promise<void>;
+  /** Source for the dev hot-reload switches; defaults to `process.env`. */
+  readonly environment?: Readonly<Record<string, string | undefined>>;
 }
 
 export interface StartedHomeBase {
@@ -67,11 +70,26 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
     throw error;
   }
 
+  // Hosted sibling applications are compiled adapters loaded once at startup,
+  // so HomeBase's own file watchers never see a change in one. In development
+  // this watcher rebuilds a changed sibling and hot-reloads its adapter in
+  // place; in production nothing is watched and nothing is ever rebuilt.
+  const devReload =
+    mode === "development"
+      ? DevReloadService.fromEnvironment(options.environment ?? process.env, {
+          applications: configService.applications,
+          reload: (id) => applicationHost.reload(id),
+          logger: rootLogger,
+        })
+      : undefined;
+  devReload?.start();
+
   const listen = options.listen ?? listenWithExpress;
   let closePromise: Promise<void> | undefined;
   const close = async (): Promise<void> => {
     if (closePromise) return closePromise;
     closePromise = (async () => {
+      await devReload?.stop();
       await applicationHost.shutdown();
       await dashboard.close();
     })();
@@ -82,6 +100,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Sta
     await listen(server, configService.server.port);
     return { app, configService, server, applicationHost, close };
   } catch (error) {
+    await devReload?.stop();
     await applicationHost.shutdown();
     await dashboard.close();
     throw error;

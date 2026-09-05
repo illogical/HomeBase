@@ -59,6 +59,16 @@ export interface ApplicationHostOptions {
   readonly installDependencies?: InstallDependenciesFn;
 }
 
+export type ReloadRejection = "unknown" | "disabled" | "busy" | "shutting-down";
+
+export type ReloadOutcome =
+  | {
+      readonly ok: true;
+      readonly state: ApplicationLifecycleState;
+      readonly summary: string;
+    }
+  | { readonly ok: false; readonly reason: ReloadRejection };
+
 class TimeoutError extends Error {
   constructor(operation: string, ms: number) {
     super(`${operation} timed out after ${ms}ms.`);
@@ -102,6 +112,7 @@ export class ApplicationHost {
   readonly #pendingLoads: Promise<void>[] = [];
   readonly #hostOrigin: string | undefined;
   readonly #installDeps: InstallDependenciesFn;
+  readonly #reloads = new Map<string, Promise<void>>();
   #server: Server | undefined;
   #shuttingDown = false;
   #shutdownPromise: Promise<void> | undefined;
@@ -130,13 +141,7 @@ export class ApplicationHost {
 
     for (const record of records) {
       if (record.state !== "loading") continue;
-      host.#pendingLoads.push(
-        host.#loadOne(record).catch(() => {
-          // #loadOne always resolves the record to a terminal state itself;
-          // this catch only guards against a truly unexpected throw so one
-          // app's background load can never reject the settled() aggregate.
-        }),
-      );
+      host.#track(host.#loadOne(record));
     }
 
     return host;
@@ -159,12 +164,96 @@ export class ApplicationHost {
 
     record.state = "loading";
     record.summary = "Waiting to retry.";
-    this.#pendingLoads.push(
-      this.#loadOne(record).catch(() => {
-        // See loadAll(): #loadOne always resolves the record itself.
-      }),
-    );
+    record.since = new Date().toISOString();
+    this.#track(this.#loadOne(record));
     return true;
+  }
+
+  /**
+   * Development hot reload: re-imports an application's compiled adapter from
+   * disk and swaps the live instance, without restarting HomeBase.
+   *
+   * Unlike retry() this is allowed from any non-disabled state, including
+   * "loaded" — a working application is the normal case for a reload. The old
+   * instance is disposed before its replacement is imported, so an adapter
+   * holding an exclusive resource (a database file, a socket) releases it
+   * before the new one claims it. The cost of that ordering is that a reload
+   * whose new adapter fails to load leaves the application "unavailable" where
+   * a working one stood a moment ago; that is reported honestly through the
+   * normal state/summary path rather than papered over, and the next
+   * successful reload restores it.
+   *
+   * Resolves once the swap has reached a terminal state. Requests arriving
+   * during the swap window get the same 503 + state/summary body any
+   * not-yet-loaded application returns.
+   */
+  async reload(id: string): Promise<ReloadOutcome> {
+    const record = this.#recordsById.get(id);
+    if (!record) return { ok: false, reason: "unknown" };
+    if (this.#shuttingDown) return { ok: false, reason: "shutting-down" };
+    if (record.state === "disabled") return { ok: false, reason: "disabled" };
+    if (this.#reloads.has(id) || record.state === "loading" || record.state === "initializing") {
+      return { ok: false, reason: "busy" };
+    }
+
+    const running = this.#performReload(record);
+    this.#reloads.set(id, running);
+    this.#track(running);
+    try {
+      await running;
+    } finally {
+      this.#reloads.delete(id);
+    }
+
+    const { state, summary } = await this.statusFor(id);
+    return { ok: true, state, summary };
+  }
+
+  async #performReload(record: ApplicationRecord): Promise<void> {
+    const logger = this.#childLogger(record.application.id);
+    logger.log("info", "reload-begin", "Reloading the hosted adapter from disk.");
+
+    record.state = "loading";
+    record.summary = "Reloading the updated adapter.";
+    record.since = new Date().toISOString();
+
+    await this.#disposeRecord(record);
+    record.instance = undefined;
+    record.realtimeDisposer = undefined;
+
+    await this.#loadOne(record, { cacheBust: true });
+
+    // Read through a helper: #loadOne mutates record.state across awaits, which
+    // TypeScript's narrowing from the assignment above cannot see.
+    if (currentState(record) === "loaded") {
+      logger.log("info", "reload-complete", "The hosted adapter was reloaded.");
+    } else {
+      logger.log("warn", "reload-failed", "The hosted adapter could not be reloaded.", {
+        summary: record.summary,
+      });
+    }
+  }
+
+  /**
+   * Keeps `#pendingLoads` a live set of in-flight work rather than an
+   * append-only history: shutdown and settled() still await everything that is
+   * actually running, but a long development session's repeated reloads don't
+   * each retain a settled promise.
+   */
+  #track(work: Promise<void>): void {
+    const entry = work.then(
+      () => {},
+      () => {
+        // #loadOne and #performReload always resolve the record to a terminal
+        // state themselves; this only stops one application's background work
+        // from rejecting the settled()/shutdown aggregate.
+      },
+    );
+    this.#pendingLoads.push(entry);
+    void entry.finally(() => {
+      const index = this.#pendingLoads.indexOf(entry);
+      if (index >= 0) this.#pendingLoads.splice(index, 1);
+    });
   }
 
   mountAll(app: Express): void {
@@ -303,20 +392,30 @@ export class ApplicationHost {
   async #disposeAll(): Promise<void> {
     const loaded = this.#records.filter((record) => record.state === "loaded");
     for (const record of loaded.reverse()) {
-      const logger = this.#childLogger(record.application.id);
-      try {
-        await withTimeout("dispose", DISPOSE_TIMEOUT_MS, async () => {
-          if (record.realtimeDisposer) {
-            await record.realtimeDisposer();
-          }
-          await record.instance?.dispose?.();
-        });
-        logger.log("info", "dispose-complete", "Application disposed.");
-      } catch (error) {
-        logger.log("warn", "dispose-failed", "Application disposal failed or timed out.", {
-          error,
-        });
-      }
+      await this.#disposeRecord(record);
+    }
+  }
+
+  /**
+   * Disposes one application's realtime handler and instance under the shared
+   * bounded timeout. Used by shutdown and by reload, so a hot reload releases
+   * an old instance's resources exactly the way a shutdown does.
+   */
+  async #disposeRecord(record: ApplicationRecord): Promise<void> {
+    if (!record.instance && !record.realtimeDisposer) return;
+    const logger = this.#childLogger(record.application.id);
+    try {
+      await withTimeout("dispose", DISPOSE_TIMEOUT_MS, async () => {
+        if (record.realtimeDisposer) {
+          await record.realtimeDisposer();
+        }
+        await record.instance?.dispose?.();
+      });
+      logger.log("info", "dispose-complete", "Application disposed.");
+    } catch (error) {
+      logger.log("warn", "dispose-failed", "Application disposal failed or timed out.", {
+        error,
+      });
     }
   }
 
@@ -324,7 +423,7 @@ export class ApplicationHost {
     return this.#logger.child({ applicationId });
   }
 
-  async #loadOne(record: ApplicationRecord): Promise<void> {
+  async #loadOne(record: ApplicationRecord, loadOptions: { cacheBust?: boolean } = {}): Promise<void> {
     const { application } = record;
     const logger = this.#childLogger(application.id);
 
@@ -353,8 +452,16 @@ export class ApplicationHost {
         "import",
         IMPORT_AND_FACTORY_TIMEOUT_MS,
         async (): Promise<HostedApplication> => {
+          // Node's ESM loader caches modules by resolved URL and cannot unload
+          // one, so a reload has to import a *different* URL to see new code
+          // on disk. The cost is that the previous module graph (and anything
+          // its closures captured) stays resident — a bounded, development-only
+          // leak, which is why cacheBust is never set on the startup path.
           const moduleUrl = pathToFileURL(application.adapterFile).href;
-          const imported = (await import(moduleUrl)) as { default?: unknown };
+          const specifier = loadOptions.cacheBust
+            ? `${moduleUrl}?homebaseReload=${Date.now()}`
+            : moduleUrl;
+          const imported = (await import(specifier)) as { default?: unknown };
           const factory = imported.default;
           if (typeof factory !== "function") {
             throw new Error("The adapter module has no default export function.");
@@ -424,9 +531,14 @@ export class ApplicationHost {
     logger.log("info", "load-complete", "Hosted adapter loaded.");
     record.state = "loaded";
     record.summary = "This application is loaded.";
+    record.since = new Date().toISOString();
     record.instance = instance;
     await this.#attachRealtimeIfReady(record);
   }
+}
+
+function currentState(record: ApplicationRecord): InternalState {
+  return record.state;
 }
 
 function createInitialRecord(application: ApplicationConfiguration): ApplicationRecord {

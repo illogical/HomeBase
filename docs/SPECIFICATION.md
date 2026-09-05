@@ -275,9 +275,23 @@ V1 reserves these HomeBase-owned API capabilities:
 
 Public responses must not expose repository paths, adapter paths, writable data
 paths, environment variables, stack traces, dependency credentials, or raw
-configuration. V1 provides no create, update, delete, reload, build, or restart
-endpoint. It provides read-only Git status plus fetch/fast-forward-pull only,
-under the separate `/api/homebase` namespace documented in §4.2a.
+configuration. V1 provides no create, update, delete, build, or restart
+endpoint, and no endpoint that mutates configuration. It provides read-only Git
+status plus fetch/fast-forward-pull only, under the separate `/api/homebase`
+namespace documented in §4.2a.
+
+Two lifecycle-only exceptions re-run the existing load pipeline for a single
+application and change nothing else — no configuration, no filesystem state:
+
+- `POST /api/applications/:id/retry` — re-attempts loading an `unavailable`
+  application. `409 { error: "not-retryable" }` from any other state.
+- `POST /api/applications/:id/reload` — re-imports that application's compiled
+  adapter from disk and swaps the live instance (§6a). Allowed from every
+  non-`disabled` state, including a working one. Responds `200 { state,
+  statusSummary }` once the swap has settled, `409 { error }` with `disabled`,
+  `busy`, or `shutting-down`, and `404 { error: "unknown" }` for an
+  unconfigured id. Intended for development; it is a lifecycle control, not a
+  build or deployment control, and never runs a build itself.
 
 `GET /api/applications` reports the full seven-state lifecycle from §6, sourced
 live from `ApplicationHost.statusFor(id)` for every configured application (no
@@ -516,6 +530,38 @@ Unexpected process-level errors are logged with application context where it can
 be determined. Startup isolation cannot make arbitrary trusted code safe after a
 fatal process error, so the external container runtime remains responsible for
 process restart and crash-loop controls.
+
+### 6a Adapter reload
+
+`ApplicationHost.reload(id)` re-imports one application's compiled adapter and
+swaps the live instance without restarting HomeBase. It adds no state to the
+table above: a reload runs `loading` → `initializing` →
+`ready`/`degraded`/`unavailable`, exactly as a first load does, with a distinct
+transition timestamp and a summary naming the reload. Requests arriving in the
+swap window get the same `503 { state, statusSummary }` any not-yet-loaded
+application returns.
+
+The sequence is dispose-then-load, reusing the per-instance disposal shutdown
+performs (realtime disposer, then `dispose()`, under the shared bounded
+timeout), so an adapter holding an exclusive resource releases it before its
+replacement claims it. The consequence is deliberate and reported honestly: a
+reload whose new adapter fails to import or initialize leaves that application
+`unavailable` where a working one stood, until a later reload succeeds. This is
+the first case in which a load failure can follow a success, so a summary must
+distinguish it. One reload per application runs at a time; a concurrent request
+is refused rather than queued. Reload never installs, builds, or mutates
+configuration — it only re-reads what is already on disk.
+
+Because Node's ESM loader caches modules by resolved URL and cannot unload one,
+a reload imports a cache-busted URL and the previous module graph stays
+resident. That bounded leak, and the requirement that a `dispose()` actually
+release the adapter's listeners, timers, and sockets (§5), are why reload is a
+development affordance: an adapter that leaks on dispose costs nothing once at
+shutdown but degrades HomeBase across a session of repeated reloads.
+
+Automatically triggering reload from filesystem changes is development-only
+tooling, not part of the runtime contract; see the hosted-application hot
+reload plan under `docs/plans/`.
 
 ## 7. Logging and operational visibility
 

@@ -2,6 +2,13 @@
 
 **Status:** Analysis only — not an implementation plan, not approved.
 
+> [!NOTE]
+> **Superseded (2026-09-04).** Both recommended steps have since been
+> implemented for development mode; see
+> [the hosted-application hot reload plan](2026-09-04-hosted-app-hot-reload.md).
+> This document is kept as the reasoning behind that work. Its "What's actually
+> missing" section describes the state of the code before that change.
+
 ## Context
 
 HomeBase already has real hot-reload for its own code: the dev Docker image

@@ -316,16 +316,70 @@ a Windows-host bind mount are not forwarded reliably through Docker Desktop.
 This is scoped to the Docker dev container only; local, non-Docker `npm run
 dev` is unaffected and keeps using native file-watch events.
 
-### Rebuilding hosted sibling applications
+### Hot reload for hosted sibling applications
 
-Hot reload above only covers HomeBase's own `src/**` and `dashboard/src/**`.
-Hosted applications (DevPlanner, LMApi, MemoryApi, LMEval) are loaded once at
-startup as **compiled** adapters (`dist/host/index.js`, per `adapterPath` in
-`config/homebase.json`) — `ApplicationHost.loadAll()` never watches a
-sibling's `dist/` output, so editing a sibling repo's source has no visible
-effect until that sibling is rebuilt and HomeBase restarts. Coordinated
-cross-repository hot reload is intentionally out of scope for v1 (see
-"Deferred beyond v1" below); `npm run rebuild:dev` is the interim workaround:
+Hosted applications (DevPlanner, LMApi, MemoryApi, LMEval) are loaded as
+**compiled** adapters (`dist/host/index.js`, per `adapterPath` in
+`config/homebase.json`), so an edit to a sibling's source is only visible once
+that sibling is rebuilt and its adapter is re-imported. In **development mode
+only** (`npm run dev`, or the `homebase-dev` container), HomeBase now does both
+for you:
+
+1. It watches each enabled sibling's source tree and, when a change settles,
+   runs that sibling's own build scripts — the same `build:hosted`/`build` plus
+   `build:host` pair described below.
+2. It watches each sibling's compiled adapter file and, when it changes, hot
+   reloads that one application in place: the old instance is disposed, the new
+   adapter is re-imported, and the live instance is swapped. HomeBase does not
+   restart, and no other application is touched.
+
+So editing a sibling's backend source ends with its API serving the new code,
+and editing its frontend source ends with the rebuilt bundle served on the next
+browser refresh (static assets are read from disk per request, so they need no
+reload). Watch progress and build failures in HomeBase's log —
+`docker compose --env-file .env.docker -f docker-compose.dev.yml logs -f
+homebase-dev` — under the `dev-reload` component: `dev-build-begin`,
+`dev-build-complete`, `dev-build-failed`, `dev-reload-applied`. A failed build
+leaves the previously loaded adapter running; a build that succeeds but produces
+an adapter that fails to load leaves that application `unavailable` on the
+dashboard until the next successful reload.
+
+Both watchers poll (they do not use `fs.watch`) for the Docker bind-mount reason
+described above, and a change must be seen identically twice before it is acted
+on, so a half-written file is never built or imported. The expensive source scan
+runs less often than the single-`stat` adapter check; a sibling's own `dist/`,
+`node_modules/`, and other generated directories are excluded from the source
+scan so a build cannot re-trigger itself.
+
+These switches (development only — none of them exist in production) tune it:
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `HOMEBASE_DEV_HOT_RELOAD` | on | `off`/`false`/`0` disables watching entirely. |
+| `HOMEBASE_DEV_AUTO_BUILD` | on | `off` keeps adapter reloads but stops HomeBase running sibling builds — use it when you run a sibling's own `--watch` build yourself. |
+| `HOMEBASE_DEV_HOT_RELOAD_APPS` | all enabled | Comma-separated ids to watch, e.g. `lmeval,lmapi`. |
+| `HOMEBASE_DEV_WATCH_INTERVAL_MS` | `1000` | Adapter-file poll interval. |
+| `HOMEBASE_DEV_SOURCE_SCAN_INTERVAL_MS` | `2000` | Source-tree scan interval. |
+
+`POST /api/applications/:id/reload` triggers the same reload by hand (it
+re-imports what is on disk; it never builds), which is useful after building a
+sibling yourself:
+
+```sh
+curl -X POST http://localhost:17106/api/applications/lmeval/reload
+```
+
+Known limitation: Node's ESM loader cannot unload a module, so every reload
+leaves the previous adapter's module graph resident. That is a bounded,
+development-only cost, but a very long session with many reloads will grow
+HomeBase's memory — restart the dev container if it matters. For the same
+reason nothing here is enabled in production.
+
+#### Rebuilding by hand
+
+`npm run rebuild:dev` remains available and is still the right tool when you
+want an explicit, full install-and-build pass (or when the watcher is switched
+off):
 
 ```sh
 npm run rebuild:dev
@@ -346,7 +400,8 @@ alone is not enough, since sibling repos split it:
   adapter HomeBase loads (`adapterPath`, e.g. `dist/host/index.js`; plain
   `build` does not produce it).
 
-Both are run when present; an app missing both is skipped with a warning
+These are the same two scripts the development watcher above runs
+automatically. Both are run when present; an app missing both is skipped with a warning
 (nothing to rebuild). Before either build step, `npm run rebuild:dev` skips
 `npm install` entirely for an app whose `package.json`/`package-lock.json`
 haven't changed since its last successful install (tracked via a signature
@@ -403,7 +458,14 @@ under `docs/plans/` and is implemented only when requested in a fresh session.
 ## Deferred beyond v1
 
 Per-user authentication and authorization, browser-based configuration editing,
-coordinated cross-repository hot reload, Git inspection and mutation, dependency
-installation, update and rollback automation, audit controls, and advanced portal
-features require separate expectation alignment and implementation plans. They
-must not be treated as implemented or approved v1 behavior.
+Git inspection and mutation, dependency installation, update and rollback
+automation, audit controls, and advanced portal features require separate
+expectation alignment and implementation plans. They must not be treated as
+implemented or approved v1 behavior.
+
+Cross-repository hot reload is now partially implemented, for development only:
+sibling source watching, automatic sibling builds, and in-place adapter reload
+ship as described in "Hot reload for hosted sibling applications" above. What
+remains deferred is the production side of that capability and true frontend HMR
+for a hosted application (a sibling's own Vite dev server proxied through
+HomeBase, rather than a rebuilt static bundle served on refresh).
