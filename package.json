@@ -11,7 +11,7 @@
     "build": "npm run clean && npm run build:server && npm run build:dashboard",
     "build:server": "tsc -p tsconfig.build.json",
     "build:dashboard": "vite build",
-    "dev": "node --env-file-if-exists=.env --watch --import tsx src/dev.ts",
+    "dev": "node --env-file-if-exists=.env --watch --watch-path=src --import tsx src/dev.ts",
     "start": "node --env-file-if-exists=.env dist/main.js",
     "test": "vitest run",
     "test:watch": "vitest",
